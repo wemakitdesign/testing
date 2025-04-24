@@ -243,3 +243,5 @@ CREATE TABLE messages (
 - Jika ingin implementasi message, jalankan SQL tersebut di Supabase SQL Editor.
 
 Untuk database setup **tanpa perubahan selain di atas**, silakan ikuti instruksi sebelumnya pada README ini!
+Update for redeploy
+
