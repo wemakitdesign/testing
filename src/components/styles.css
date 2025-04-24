@@ -1,0 +1,95 @@
+@keyframes shine-border {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+html {
+  scroll-behavior: smooth;
+}
+
+.recommendedCard {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+  border-radius: 16px;
+  background-image: 
+    linear-gradient(#ffffff, #ffffff), 
+    linear-gradient(120deg, #FB810A, #FFD700, #ffffff, #FFD700, #FB810A);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-size: 200% 100%;
+  animation: shine-border 3s linear infinite;
+  box-shadow: 0 0 15px rgba(251, 129, 10, 0.3);
+}
+
+.pricingCard {
+  border-radius: 16px;
+}
+
+.lightCard {
+  background-color: #FFFFFF;
+  border: 1px solid #E7E8E9;
+}
+
+.darkCard {
+  background-color: #000000;
+  color: #000000;
+}
+
+.ctaButton {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  font-size: 23px;
+  font-family: "San Francisco Display", sans-serif;
+  transition: all 0.3s ease;
+}
+
+.outlineButton {
+  background-color: transparent;
+  border: 1px solid #000000;
+  color: #000000;
+}
+
+.filledButton {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+.cta-button {
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  font-size: 23px;
+  font-family: "San Francisco Display", sans-serif;
+  transition: all 0.3s ease;
+}
+
+.filled {
+  background-color: #000;
+  color: #fff;
+}
+
+.filled:hover {
+  background-color: #222;
+  transform: translateY(-2px);
+}
+
+.outline {
+  background-color: transparent;
+  border: 1px solid #E7E8E9;
+  color: #99948F;
+}
+
+.outline:hover {
+  background-color: #f5f5f5;
+  border-color: #000;
+  color: #000;
+  transform: translateY(-2px);
+}
