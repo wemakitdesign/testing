@@ -38,13 +38,17 @@ const Success: React.FC = () => {
         </p>
 
         <div style={styles.buttonGroup}>
-          <button style={styles.primaryButton} onClick={() => navigate('/')}>
-            Go to Homepage
-          </button>
-          <button style={styles.secondaryButton} onClick={downloadInvoice}>
-            Download Invoice
-          </button>
-        </div>
+  <button style={styles.primaryButton} onClick={() => navigate('/dashboard')}>
+    Go to Dashboard
+  </button>
+  <button style={styles.secondaryButton} onClick={() => navigate('/')}>
+    Go to Homepage
+  </button>
+  <button style={styles.secondaryButton} onClick={downloadInvoice}>
+    Download Invoice
+  </button>
+</div>
+
       </motion.div>
     </div>
   );
@@ -98,6 +102,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '10px',
     cursor: 'pointer',
     fontWeight: 600,
+    transition: 'all 0.3s ease',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
@@ -108,6 +113,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '10px',
     cursor: 'pointer',
     fontWeight: 600,
+    transition: 'all 0.3s ease',
   },
 };
 

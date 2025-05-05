@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -9,26 +8,34 @@ import DashboardStats from '@/components/dashboard/client/DashboardStats';
 import QuickActions from '@/components/dashboard/client/QuickActions';
 import ActiveRequests from '@/components/dashboard/client/ActiveRequests';
 import DashboardSearch from '@/components/dashboard/client/DashboardSearch';
+import { getProjects } from '@/utils/supabase';
 
 const ClientDashboard = () => {
   const { user } = useAuth();
+  const firstName = user?.name?.split(' ')[0] || '';
 
-  // Extract only the first name
-  const firstName = user?.name?.split(" ")[0] || "";
+  const [activeRequests, setActiveRequests] = useState([]);
+  const [completedRequests, setCompletedRequests] = useState([]);
 
-  // Mock data
-  const activeRequests = [
-    { id: '1', title: 'Website Redesign', status: 'inProgress', createdAt: '2023-05-15', eta: '2023-06-01', progress: 65 },
-    { id: '2', title: 'Logo Design', status: 'pending', createdAt: '2023-05-20', eta: '2023-05-25', progress: 0 },
-  ];
+  useEffect(() => {
+    const fetchProjects = async () => {
+      try {
+        const projects = await getProjects();
+        console.log("🔥 Data project dari Supabase:", projects);
 
-  const completedRequests = [
-    { id: '3', title: 'Business Card Design', status: 'completed', createdAt: '2023-04-10', completedAt: '2023-04-15' },
-  ];
+        const active = projects.filter((p: any) => p.status !== 'completed');
+        const completed = projects.filter((p: any) => p.status === 'completed');
+        setActiveRequests(active);
+        setCompletedRequests(completed);
+      } catch (err) {
+        console.error('Error fetching projects:', err);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   const handleMessageDesigner = () => {
-    // Fungsi untuk memanggil message designer (contoh: redirect ke chat page)
-    window.location.href = '/dashboard/messages'; // Ganti sesuai fitur chat Anda
+    window.location.href = '/dashboard/messages';
   };
 
   const containerVariants = {
@@ -36,9 +43,9 @@ const ClientDashboard = () => {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1
-      }
-    }
+        staggerChildren: 0.1,
+      },
+    },
   };
 
   const itemVariants = {
@@ -46,11 +53,8 @@ const ClientDashboard = () => {
     visible: {
       opacity: 1,
       y: 0,
-      transition: {
-        type: "spring",
-        stiffness: 100
-      }
-    }
+      transition: { type: 'spring', stiffness: 100 },
+    },
   };
 
   return (
@@ -62,15 +66,14 @@ const ClientDashboard = () => {
     >
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <motion.div variants={itemVariants}>
-          {/* Perbaiki penulisan dan tambahkan spasi */}
           <h1 className="text-3xl font-bold tracking-tight">
             Welcome back,{' '}
             <span className="bg-gradient-to-r from-wemakit-purple to-blue-500 text-transparent bg-clip-text">
-              {user?.name}
+              {firstName}
             </span>
           </h1>
           <p className="text-muted-foreground">
-            Here&apos;s an overview of your design requests and account.
+            Here's an overview of your design requests and account.
           </p>
         </motion.div>
 
@@ -90,17 +93,24 @@ const ClientDashboard = () => {
       </div>
 
       <DashboardStats 
-        activeRequests={activeRequests.length}
-        completedRequests={completedRequests.length}
-        unreadMessages={3}
+        activeRequests={activeRequests.length} 
+        completedRequests={completedRequests.length} 
+        unreadMessages={3} 
       />
 
-      <QuickActions />
-
-      <ActiveRequests requests={activeRequests} />
+<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div className="lg:col-span-2">
+    <ActiveRequests requests={activeRequests} />
+  </div>
+  <div className="lg:col-span-1">
+    {/* Changed to vertical layout with full height */}
+    <div className="flex flex-col gap-4 h-full">
+      <QuickActions className="grid grid-cols-1 gap-4" />
+    </div>
+  </div>
+</div>
     </motion.div>
   );
 };
 
 export default ClientDashboard;
-

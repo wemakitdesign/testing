@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { UserRole } from '../../types/auth';
 import { cn } from '../../lib/utils';
 import { motion } from 'framer-motion';
-import Logo from '../Logo';
+import logo from '@/assets/logo-wemakit.svg';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Button } from '../ui/button';
 import { X, Menu, LogOut } from 'lucide-react';
@@ -78,13 +78,14 @@ const SidebarNav: React.FC<SidebarNavProps> = ({
         variants={fadeInVariants}
       >
         <div className={cn("flex items-center", !isSidebarOpen && "lg:justify-center")}>
-          {isSidebarOpen ? (
-            <Logo />
-          ) : (
-            <div className="w-8 h-8 gradient-bg-hero rounded-md flex items-center justify-center text-white font-bold">
-              W
-            </div>
-          )}
+        {isSidebarOpen ? (
+  <img src={logo} alt="Wemakit Logo" className="h-8 w-auto" />
+) : (
+  <div className="w-8 h-8 gradient-bg-hero rounded-md flex items-center justify-center text-white font-bold">
+    W
+  </div>
+)}
+
         </div>
         <Button
           variant="ghost"

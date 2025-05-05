@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import wemakitLogo from '../assets/logo-wemakit.svg';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL!,
+  import.meta.env.VITE_SUPABASE_ANON_KEY!
+);
 
 const CreateAccount: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +24,8 @@ const CreateAccount: React.FC = () => {
     password: '',
     confirmPassword: '',
   });
+
+  const [error, setError] = useState('');
 
   const planDetails: Record<string, { price: string; features: string[] }> = {
     basic: {
@@ -48,14 +56,56 @@ const CreateAccount: React.FC = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate('/checkout', {
-      state: {
-        userData: formData,
-        plan: selectedPlan,
-      },
-    });
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (signUpError || !data.user) {
+        setError(signUpError?.message || 'Signup failed');
+        return;
+      }
+
+      const { error: insertError } = await supabase.from('clients').insert({
+        id: data.user.id,
+        name: `${formData.firstName} ${formData.lastName}`,
+        email: formData.email,
+        company: formData.companyName,
+        website: formData.companyWebsite,
+      });
+
+      if (insertError) {
+        setError('Signup succeeded but failed to save profile.');
+        return;
+      }
+
+      // ✅ Kalau sukses signup + insert, langsung arahkan ke Checkout!
+      navigate('/checkout', {
+        state: {
+          userData: {
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            companyName: formData.companyName,
+            companyWebsite: formData.companyWebsite,
+            role: formData.role,
+            email: formData.email,
+          },
+          plan: selectedPlan,
+        },
+      });
+    } catch (err: any) {
+      console.error('Signup failed:', err);
+      setError('Unexpected error occurred');
+    }
   };
 
   const { price, features } = planDetails[selectedPlan.toLowerCase()] || planDetails.basic;
@@ -106,6 +156,7 @@ const CreateAccount: React.FC = () => {
               />
             </div>
           ))}
+          {error && <p style={{ color: 'red', marginBottom: '12px' }}>{error}</p>}
           <button type="submit" style={styles.submitBtn}>Register</button>
         </form>
 

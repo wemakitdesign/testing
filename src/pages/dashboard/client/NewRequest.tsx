@@ -1,34 +1,21 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../../lib/supabaseClient';
 import { useAuth } from '../../../context/AuthContext';
 import { Button } from '../../../components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../../components/ui/card';
-import { Textarea } from '../../../components/ui/textarea';
 import { Input } from '../../../components/ui/input';
+import { Textarea } from '../../../components/ui/textarea';
 import { Label } from '../../../components/ui/label';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '../../../components/ui/card';
 import { FileUploader } from '../../../components/ui/file-uploader';
-import { StatusBadge } from '../../../components/ui/status-badge';
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { toast } from '../../../hooks/use-toast';
-import { ChevronLeft, ChevronRight, FileType, Check, MessageSquarePlus } from 'lucide-react';
 
-const steps = [
-  { id: 'details', name: 'Project Details' },
-  { id: 'requirements', name: 'Requirements' },
-  { id: 'attachments', name: 'Attachments' },
-  { id: 'review', name: 'Review' },
-];
+const steps = ["Project Details", "Requirements", "Attachments", "Review"];
 
-const requestTypeDescriptions: Record<string, string> = {
-  website: "UI/UX untuk website, landing page, atau web apps.",
-  logo: "Pembuatan logo professional sesuai brand.",
-  branding: "Paket branding lengkap (logo, warna, guidelines).",
-  print: "Desain materi cetak seperti brosur, poster, atau banner.",
-  other: "Proyek desain custom di luar kategori lain.",
-};
-
-const NewRequest = () => {
+const NewRequest: React.FC = () => {
   const { user } = useAuth();
+  console.log("Supabase User ID:", user?.id); // ✅ This is the correct UID to use
   const navigate = useNavigate();
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -40,355 +27,197 @@ const NewRequest = () => {
     requirements: '',
     files: [] as File[],
   });
+  const [uploading, setUploading] = useState(false);
 
-  const firstName = user?.name?.split(" ")[0] || "";
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleFileUpload = (files: File[]) => {
-    setFormData(prev => ({ ...prev, files: [...prev.files, ...files] }));
-  };
-
-  const removeFile = (index: number) => {
-    setFormData(prev => ({
-      ...prev,
-      files: prev.files.filter((_, i) => i !== index)
-    }));
+  const handleFileSelected = (selectedFiles: File[]) => {
+    setFormData(prev => ({ ...prev, files: selectedFiles }));
   };
 
   const nextStep = () => {
-    if (currentStep === 0 && !formData.title) {
-      toast({
-        title: "Missing information",
-        description: "Please provide a project title",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (currentStep < steps.length - 1) {
-      setCurrentStep(prev => prev + 1);
-    }
+    if (currentStep < steps.length - 1) setCurrentStep(current => current + 1);
   };
 
   const prevStep = () => {
-    if (currentStep > 0) {
-      setCurrentStep(prev => prev - 1);
+    if (currentStep > 0) setCurrentStep(current => current - 1);
+  };
+
+  // ... (other imports remain the same)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setUploading(true);
+  
+    try {
+      console.log("========================");
+      console.log("🟡 AUTH STATE USER:", user);
+      console.log("🟢 Supabase Auth UID:", user.auth_uid);
+  
+      // ✅ Ambil client berdasarkan auth_uid
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('auth_uid', user.auth_uid) // ✅ FIXED di sini
+        .maybeSingle();
+  
+      console.log("🔵 Client fetch result:", client);
+  
+      if (clientError || !client) {
+        throw new Error('Client not found or unauthorized');
+      }
+  
+      console.log("🔴 Client ID to insert into task:", client.id);
+  
+      // Upload files jika ada
+      let uploadedUrls: string[] = [];
+  
+      if (formData.files.length > 0) {
+        for (const file of formData.files) {
+          const fileName = `${Date.now()}-${file.name}`;
+          const { data, error } = await supabase.storage
+            .from('task-files')
+            .upload(`client-uploads/${client.id}/${fileName}`, file);
+  
+          if (error) throw error;
+  
+          const publicUrl = supabase.storage
+            .from('task-files')
+            .getPublicUrl(data.path).data.publicUrl;
+  
+          if (publicUrl) uploadedUrls.push(publicUrl);
+        }
+      }
+  
+      // Insert task ke tabel `tasks`
+      const { error: insertError } = await supabase.from('tasks').insert([
+        {
+          title: formData.title,
+          description: formData.description,
+          request_type: formData.requestType,
+          deadline: formData.deadline || null,
+          requirements: formData.requirements,
+          files: uploadedUrls,
+          client_id: client.id, // ✅ Cocok dengan policy
+          status: 'unassigned',
+        }
+      ]);
+  
+      if (insertError) throw insertError;
+  
+      toast({ title: "Success", description: "Your task has been submitted!" });
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error(error);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
   };
-
-  const handleMessageDesigner = () => {
-    window.location.href = '/dashboard/messages';
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Simulasi submit
-    console.log('Submitting request:', formData);
-
-    toast({
-      title: "Request submitted!",
-      description: "Tim desain kami akan segera memproses permintaan Anda.",
-    });
-
-    navigate('/dashboard');
-  };
+  
+  
+  
+  console.log("Current Step:", currentStep);
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
-      {/* Intro & Message Designer CTA */}
-      <div className="flex flex-wrap items-center justify-between gap-6 rounded-xl bg-gradient-to-br from-wemakit-purple/80 via-wemakit-purple/30 to-blue-100/70 shadow p-6 mb-4 ring-2 ring-wemakit-purple/15">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-1 text-wemakit-purple">
-            Hi, {firstName} 👋
-          </h1>
-          <p className="text-muted-foreground max-w-lg">
-            Siap memulai project baru? Ceritakan kebutuhan desainmu pada tim <b>WeMakIt</b> di form berikut, bisa juga konsultasi langsung ke designer kami!
-          </p>
-        </div>
-        <Button
-          onClick={handleMessageDesigner}
-          variant="outline"
-          className="gap-2 border-wemakit-purple text-wemakit-purple bg-white hover:bg-wemakit-purple/5 shadow-md transition"
-          title="Tanya langsung desain atau progress ke designer"
-        >
-          <MessageSquarePlus className="text-wemakit-purple" />
-          <span className="font-medium">Message Designer</span>
-        </Button>
-      </div>
-      
-      {/* Stepper dengan badge & progress */}
-      <div className="flex justify-between relative mb-8">
-        <div className="absolute top-1/2 h-0.5 w-full bg-gradient-to-r from-wemakit-purple/30 to-wemakit-purple/10 -z-10 -translate-y-1/2"></div>
+    <div className="max-w-3xl mx-auto space-y-8">
+      {/* Stepper */}
+      <div className="flex justify-between mb-8">
         {steps.map((step, index) => (
-          <div key={step.id} className="relative flex flex-col items-center flex-1 min-w-0">
-            <div 
-              className={`z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors text-base font-bold shadow-sm ring-2 ring-offset-2
-                ${
-                  index < currentStep
-                    ? 'bg-wemakit-purple text-white border-wemakit-purple'
-                    : index === currentStep
-                    ? 'bg-white border-wemakit-purple text-wemakit-purple shadow-md'
-                    : 'bg-white border-gray-300 text-gray-400'
-                }`}
-            >
-              {index < currentStep ? (
-                <Check className="h-5 w-5" />
-              ) : (
-                index + 1
-              )}
+          <div key={index} className="flex flex-col items-center text-center">
+            <div className={`h-8 w-8 flex items-center justify-center rounded-full ${
+              index <= currentStep ? 'bg-primary text-white' : 'bg-muted text-muted-foreground'
+            }`}>
+              {index + 1}
             </div>
-            <span 
-              className={`block mt-2 text-xs font-semibold max-w-[72px] text-center transition-all
-                ${
-                  index === currentStep
-                    ? 'text-wemakit-purple drop-shadow'
-                    : index < currentStep
-                    ? 'text-wemakit-purple/80'
-                    : 'text-gray-400'
-                }`}
-            >
-              {step.name}
-            </span>
+            <div className="text-xs mt-1">{step}</div>
           </div>
         ))}
       </div>
 
       <form onSubmit={handleSubmit}>
-        <Card className="mb-8 shadow-xl border border-wemakit-purple/25">
+        <Card>
+          <CardHeader>
+            <CardTitle>{steps[currentStep]}</CardTitle>
+            <CardDescription>
+              {currentStep === 0 && 'Fill in the project details.'}
+              {currentStep === 1 && 'Specify project requirements.'}
+              {currentStep === 2 && 'Upload any relevant files.'}
+              {currentStep === 3 && 'Review all information before submitting.'}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
           {currentStep === 0 && (
-            <>
-              <CardHeader>
-                <CardTitle>
-                  <span className="inline-block mr-2">📝</span> Project Details
-                </CardTitle>
-                <CardDescription>
-                  <span className="font-medium text-wemakit-purple">Beri nama dan deskripsikan idemu</span>, semakin detail judul & deskripsi akan mempermudah designer memahami brief Anda.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="title">
-                    Project Title <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="title"
-                    name="title"
-                    placeholder="Contoh: Website Produk, Logo Baru"
-                    value={formData.title}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="description">Project Description</Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    placeholder="Ceritakan gambaran umum proyek desain Anda..."
-                    rows={4}
-                    value={formData.description}
-                    onChange={handleInputChange}
-                  />
-                </div>
+  <>
+    <Label>Project Title</Label>
+    <Input 
+      value={formData.title} 
+      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))} 
+      required 
+    />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="requestType">Request Type</Label>
-                    <select
-                      id="requestType"
-                      name="requestType"
-                      className="flex h-10 w-full rounded-lg border border-input bg-violet-50 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-wemakit-purple focus-visible:ring-offset-2"
-                      value={formData.requestType}
-                      onChange={handleInputChange}
-                    >
-                      <option value="website">Website Design</option>
-                      <option value="logo">Logo Design</option>
-                      <option value="branding">Branding Package</option>
-                      <option value="print">Print Materials</option>
-                      <option value="other">Other</option>
-                    </select>
-                    <div className="text-xs text-wemakit-purple/80 mt-1 italic bg-gradient-to-l from-transparent to-wemakit-purple/10 rounded px-2 py-1">
-                      {requestTypeDescriptions[formData.requestType]}
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="deadline">Preferred Deadline</Label>
-                    <Input
-                      id="deadline"
-                      name="deadline"
-                      type="date"
-                      className="rounded-lg border-violet-200"
-                      value={formData.deadline}
-                      onChange={handleInputChange}
-                    />
-                    <p className="text-xs text-gray-500 mt-1">Opsional. Jika urgent, silakan konsultasi ke designer langsung!</p>
-                  </div>
-                </div>
-              </CardContent>
-            </>
-          )}
+    <Label>Project Description</Label>
+    <Textarea 
+      value={formData.description} 
+      onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))} 
+    />
 
-          {currentStep === 1 && (
-            <>
-              <CardHeader>
-                <CardTitle>
-                  <span className="inline-block mr-2">🔎</span> Project Requirements
-                </CardTitle>
-                <CardDescription>
-                  <span className="font-medium text-wemakit-purple">Detilkan kebutuhan & preferensi desain</span> sejelas mungkin agar hasil lebih maksimal.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Label htmlFor="requirements">Requirements & Specifications</Label>
-                  <Textarea
-                    id="requirements"
-                    name="requirements"
-                    placeholder="List kebutuhan, referensi, atau style yang diinginkan..."
-                    rows={8}
-                    value={formData.requirements}
-                    onChange={handleInputChange}
-                  />
-                  <div className="text-xs text-blue-900/70 bg-blue-200/30 rounded px-2 py-1">
-                    Tips: Bisa tuliskan warna favorit, font yang diinginkan, link inspirasi, dsb.
-                  </div>
-                </div>
-              </CardContent>
-            </>
-          )}
+    <Label>Category / Request Type</Label>
+    <select
+      className="w-full border rounded-md p-2 text-sm text-foreground bg-background"
+      value={formData.requestType}
+      onChange={(e) => setFormData(prev => ({ ...prev, requestType: e.target.value }))}
+      required
+    >
+      <option value="website">Website</option>
+      <option value="logo">Logo</option>
+      <option value="branding">Branding</option>
+      <option value="social-media">Social Media</option>
+      <option value="packaging">Packaging</option>
+      <option value="others">Others</option>
+    </select>
+  </>
+)}
 
-          {currentStep === 2 && (
-            <>
-              <CardHeader>
-                <CardTitle>
-                  <span className="inline-block mr-2">📎</span> Attachments & References
-                </CardTitle>
-                <CardDescription>
-                  Upload file referensi, contoh desain favorit, atau dokumen pendukung lain.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <FileUploader
-                  onFilesSelected={handleFileUpload}
-                  maxFiles={5}
-                  maxSize={10 * 1024 * 1024} // 10MB
-                  accept="image/*,.jpg,.jpeg,.png,.gif,.pdf,.zip"
+
+            {currentStep === 1 && (
+              <>
+                <Label>Project Requirements</Label>
+                <Textarea value={formData.requirements} onChange={(e) => setFormData(prev => ({ ...prev, requirements: e.target.value }))} />
+              </>
+            )}
+
+            {currentStep === 2 && (
+              <>
+                <Label>Attachments</Label>
+                <FileUploader 
+                  onFilesSelected={handleFileSelected} 
+                  multiple
+                  accept="image/*,.pdf,.zip"
                 />
-                {formData.files.length > 0 && (
-                  <div className="mt-5">
-                    <Label>Uploaded Files ({formData.files.length})</Label>
-                    <div className="mt-1 space-y-2">
-                      {formData.files.map((file, index) => (
-                        <div key={index} className="flex items-center justify-between border rounded-md p-2 bg-wemakit-purple/5 border-wemakit-purple/10">
-                          <div className="flex items-center">
-                            <FileType className="h-4 w-4 mr-2 text-wemakit-purple/80" />
-                            <span className="text-sm font-medium">{file.name} <span className="text-xs text-muted-foreground">({(file.size / 1024).toFixed(2)} KB)</span></span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeFile(index)}
-                            className="h-7 text-xs text-destructive/80 hover:bg-destructive/10"
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </>
-          )}
+              </>
+            )}
 
-          {currentStep === 3 && (
-            <>
-              <CardHeader>
-                <CardTitle>
-                  <span className="inline-block mr-2">✅</span> Review Your Request
-                </CardTitle>
-                <CardDescription>
-                  Pastikan semua data berikut benar sebelum mengirim permintaan ke tim desain.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="font-medium">Project Title:</span>
-                    <span>{formData.title}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="font-medium">Request Type:</span>
-                    <span className="capitalize">{formData.requestType}</span>
-                  </div>
-                  {formData.deadline && (
-                    <div className="flex justify-between">
-                      <span className="font-medium">Deadline:</span>
-                      <span>{new Date(formData.deadline).toLocaleDateString()}</span>
-                    </div>
-                  )}
-                </div>
-                
-                <div className="space-y-2">
-                  <span className="font-medium">Description:</span>
-                  <p className="text-sm bg-muted/30 p-3 rounded-md">
-                    {formData.description || "Tidak ada deskripsi"}
-                  </p>
-                </div>
-                
-                <div className="space-y-2">
-                  <span className="font-medium">Requirements:</span>
-                  <p className="text-sm bg-muted/30 p-3 rounded-md whitespace-pre-wrap">
-                    {formData.requirements || "Tidak ada requirements"}
-                  </p>
-                </div>
-                
-                <div>
-                  <span className="font-medium">Attachments ({formData.files.length}):</span>
-                  {formData.files.length > 0 ? (
-                    <ul className="mt-2 list-disc list-inside text-sm">
-                      {formData.files.map((file, index) => (
-                        <li key={index}>{file.name} ({(file.size / 1024).toFixed(2)} KB)</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm mt-1 text-muted-foreground">No files attached</p>
-                  )}
-                </div>
-                
-                <div className="pt-4 border-t">
-                  <StatusBadge variant="info" className="w-full justify-center py-2">
-                    Request Anda akan kami review, Anda akan dihubungi setelah designer ditugaskan. <br />
-                    <span className="italic">Jika ingin mempercepat/melacak progres, klik Message Designer di atas.</span>
-                  </StatusBadge>
-                </div>
-              </CardContent>
-            </>
-          )}
+            {currentStep === 3 && (
+              <div className="space-y-2 text-sm">
+                <p><strong>Title:</strong> {formData.title}</p>
+                <p><strong>Description:</strong> {formData.description}</p>
+                <p><strong>Requirements:</strong> {formData.requirements}</p>
+                <p><strong>Attachments:</strong> {formData.files.map(file => file.name).join(', ') || 'None'}</p>
+              </div>
+            )}
+          </CardContent>
 
           <CardFooter className="flex justify-between">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={prevStep}
-              disabled={currentStep === 0}
-            >
-              <ChevronLeft className="mr-2 h-4 w-4" /> Back
+            <Button type="button" onClick={prevStep} disabled={currentStep === 0}>
+              <ChevronLeft className="h-4 w-4 mr-1" /> Back
             </Button>
-            
             {currentStep < steps.length - 1 ? (
               <Button type="button" onClick={nextStep}>
-                Next <ChevronRight className="ml-2 h-4 w-4" />
+                Next <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
-              <Button type="submit">
-                Submit Request <Check className="ml-2 h-4 w-4" />
+              <Button type="submit" disabled={uploading}>
+                Submit <Check className="h-4 w-4 ml-1" />
               </Button>
             )}
           </CardFooter>

@@ -25,15 +25,15 @@ const Navbar = () => {
           {/* Right Side: Menu + Login */}
           {!isMobile && (
             <div style={styles.rightContainer}>
-              <nav style={styles.navContainer}>
+              <nav>
                 <ul style={styles.navList}>
-                  <li style={styles.navItem}>
+                  <li>
                     <a href="#our-work" style={styles.navLink}>Our Work</a>
                   </li>
-                  <li style={styles.navItem}>
+                  <li>
                     <a href="#pricing-section" style={styles.navLink}>Pricing</a>
                   </li>
-                  <li style={styles.navItem}>
+                  <li>
                     <button
                       onClick={() => navigate('/book-a-call')}
                       style={{
@@ -52,6 +52,7 @@ const Navbar = () => {
                 </ul>
               </nav>
 
+              {/* Login button */}
               <button
                 onClick={() => navigate('/login')}
                 style={styles.loginButton}
@@ -105,7 +106,6 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '2rem',
   },
-  navContainer: {},
   navList: {
     display: 'flex',
     listStyle: 'none',
@@ -113,7 +113,6 @@ const styles: Record<string, React.CSSProperties> = {
     margin: 0,
     padding: 0,
   },
-  navItem: {},
   navLink: {
     color: '#2d2d2d',
     textDecoration: 'none',
@@ -129,6 +128,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 'bold',
     textDecoration: 'none',
     border: '1px solid transparent',
+    cursor: 'pointer',
+    fontSize: '1rem',
   },
 };
 

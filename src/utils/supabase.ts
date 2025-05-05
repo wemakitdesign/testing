@@ -18,8 +18,12 @@ export const getProjects = async () => {
       clients (name),
       designers (name, avatar, capacity, active_projects)
     `);
-  
-  if (error) throw error;
+
+  if (error) {
+    console.error("🔥 Supabase error getProjects:", error);
+    throw error;
+  }
+
   return data;
 };
 

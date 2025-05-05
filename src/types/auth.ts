@@ -1,16 +1,17 @@
-
-export type UserRole = 'client' | 'designer' | 'admin';
-
-export interface User {
+export interface CustomUser {
   id: string;
-  name: string;
+  auth_uid: string;
   email: string;
-  role: UserRole;
+  name: string;
+  company?: string;
+  website?: string;
   avatar?: string;
+  capacity?: number;
+  role: 'client' | 'designer' | 'admin';
 }
 
 export interface AuthState {
-  user: User | null;
+  user: CustomUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }

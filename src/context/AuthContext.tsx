@@ -1,35 +1,15 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, AuthState, UserRole } from '../types/auth';
+import { createClient } from '@supabase/supabase-js';
+import { AuthState, CustomUser } from '../types/auth';
 
-// Mock users for demonstration
-const MOCK_USERS = [
-  {
-    id: '1',
-    name: 'John Client',
-    email: 'client@wemakit.com',
-    role: 'client' as UserRole,
-    avatar: 'https://ui-avatars.com/api/?name=John+Client&background=0D8ABC&color=fff',
-  },
-  {
-    id: '2',
-    name: 'Jane Designer',
-    email: 'designer@wemakit.com',
-    role: 'designer' as UserRole,
-    avatar: 'https://ui-avatars.com/api/?name=Jane+Designer&background=8B56F6&color=fff',
-  },
-  {
-    id: '3',
-    name: 'Alex Admin',
-    email: 'admin@wemakit.com',
-    role: 'admin' as UserRole,
-    avatar: 'https://ui-avatars.com/api/?name=Alex+Admin&background=111111&color=fff',
-  },
-];
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL!,
+  import.meta.env.VITE_SUPABASE_ANON_KEY!
+);
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,61 +21,131 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading: true,
   });
 
-  useEffect(() => {
-    // Check for saved auth in localStorage
-    const savedUser = localStorage.getItem('wemakit_user');
-    if (savedUser) {
-      try {
-        const user = JSON.parse(savedUser);
-        setAuthState({
-          user,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      } catch (error) {
-        console.error('Failed to parse saved user:', error);
-        localStorage.removeItem('wemakit_user');
-        setAuthState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-        });
-      }
-    } else {
-      setAuthState(prev => ({ ...prev, isLoading: false }));
-    }
-  }, []);
+  const fetchUserProfile = async (uid: string) => {
+    try {
+      const { data: client } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('auth_uid', uid)
+        .maybeSingle();
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // This is a mock implementation - in a real app, you would call your auth API
-    setAuthState(prev => ({ ...prev, isLoading: true }));
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const foundUser = MOCK_USERS.find(user => user.email === email);
-    
-    if (foundUser && password === 'password') { // In a real app, you'd verify the password properly
-      setAuthState({
-        user: foundUser,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-      localStorage.setItem('wemakit_user', JSON.stringify(foundUser));
-      return true;
+      if (client) {
+        const fullUser: CustomUser = {
+          id: client.id,
+          auth_uid: client.auth_uid,
+          email: client.email,
+          name: client.name,
+          company: client.company,
+          website: client.website,
+          role: 'client',
+        };
+        setAuthState({ user: fullUser, isAuthenticated: true, isLoading: false });
+        localStorage.setItem('wemakit_user', JSON.stringify(fullUser));
+        return;
+      }
+
+      const { data: designer } = await supabase
+        .from('designers')
+        .select('*')
+        .eq('auth_uid', uid)
+        .maybeSingle();
+
+      if (designer) {
+        const fullUser: CustomUser = {
+          id: designer.id,
+          auth_uid: designer.auth_uid,
+          email: designer.email,
+          name: designer.name,
+          avatar: designer.avatar,
+          capacity: designer.capacity,
+          role: 'designer',
+        };
+        setAuthState({ user: fullUser, isAuthenticated: true, isLoading: false });
+        localStorage.setItem('wemakit_user', JSON.stringify(fullUser));
+        return;
+      }
+
+      const { data: admin } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('auth_uid', uid)
+        .maybeSingle();
+
+      if (admin) {
+        const fullUser: CustomUser = {
+          id: admin.id,
+          auth_uid: admin.auth_uid,
+          email: admin.email,
+          name: admin.name,
+          role: 'admin',
+        };
+        setAuthState({ user: fullUser, isAuthenticated: true, isLoading: false });
+        localStorage.setItem('wemakit_user', JSON.stringify(fullUser));
+        return;
+      }
+
+      console.error('No matching profile found for UID:', uid);
+      await logout();
+    } catch (err) {
+      console.error('Error fetching user profile:', err);
+      await logout();
     }
-    
-    setAuthState(prev => ({ ...prev, isLoading: false }));
-    return false;
   };
 
-  const logout = () => {
-    localStorage.removeItem('wemakit_user');
-    setAuthState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
+  const fetchUserSession = async () => {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user;
+
+    if (error || !user?.id) {
+      console.error('No valid session found:', error);
+      setAuthState({ user: null, isAuthenticated: false, isLoading: false });
+      return;
+    }
+
+    await fetchUserProfile(user.id);
+  };
+
+  useEffect(() => {
+    const cached = localStorage.getItem('wemakit_user');
+    if (cached) {
+      setAuthState({ user: JSON.parse(cached), isAuthenticated: true, isLoading: true });
+    }
+
+    fetchUserSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        fetchUserSession();
+      } else if (event === 'SIGNED_OUT') {
+        setAuthState({ user: null, isAuthenticated: false, isLoading: false });
+        localStorage.removeItem('wemakit_user');
+      }
     });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    setAuthState(prev => ({ ...prev, isLoading: true }));
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      console.error('Login error:', error);
+      setAuthState(prev => ({ ...prev, isLoading: false }));
+      return false;
+    }
+
+    await fetchUserSession();
+    return true;
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
+    localStorage.clear();
+    sessionStorage.clear();
+    setAuthState({ user: null, isAuthenticated: false, isLoading: false });
   };
 
   return (
@@ -107,8 +157,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

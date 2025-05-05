@@ -1,65 +1,69 @@
 import React from 'react';
-import { Calendar, MoreHorizontal, User } from 'lucide-react';
-import { Project } from '../../types/project';
-import { formatDate, getPriorityBadge } from '../../utils/projectUtils';
-import { StatusBadge } from '../ui/status-badge';
-import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
+import { Card, CardContent } from '@/components/ui/card';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { Progress } from '@/components/ui/progress';
+import { Calendar, User } from 'lucide-react';
 
 interface ProjectCardProps {
-  project: Project;
+  project: {
+    id: string;
+    name: string;
+    status: string;
+    createdAt: string;
+    deadline?: string;
+    completionPercentage: number;
+    designer?: {
+      id: string;
+      name: string;
+      avatar?: string;
+    };
+  };
 }
 
-const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => (
-  <div 
-    className="border rounded-md bg-card p-3 mb-3 shadow-sm hover:shadow-md transition-shadow cursor-move"
-    draggable
-  >
-    <div className="flex justify-between items-start">
-      <h3 className="font-medium truncate max-w-[170px]">{project.name}</h3>
-      <div className="flex">
-        <button className="text-muted-foreground rounded-full h-6 w-6 inline-flex items-center justify-center hover:bg-muted">
-          <MoreHorizontal className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
-    <p className="text-xs text-muted-foreground mt-1">{project.client}</p>
-    
-    <div className="mt-3 space-y-2">
-      <div className="flex justify-between items-center text-xs">
-        <div className="flex items-center text-muted-foreground">
-          <Calendar className="h-3.5 w-3.5 mr-1" />
-          Due: {formatDate(project.deadline)}
-        </div>
-        {getPriorityBadge(project.priority)}
-      </div>
-      
-      {project.designer ? (
-        <div className="flex items-center mt-2">
-          <div className="flex-shrink-0 h-6 w-6 rounded-full bg-muted overflow-hidden mr-2">
-            <img src={project.designer.avatar} alt={project.designer.name} />
+const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
+  return (
+    <Card className="overflow-hidden hover:shadow-md transition-all cursor-pointer">
+      <Link to={`/dashboard/projects/${project.id}`}>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold text-lg line-clamp-1">{project.name}</h4>
+            <StatusBadge variant={project.status === 'inProgress' ? 'inProgress' : 'pending'}>
+              {project.status.charAt(0).toUpperCase() + project.status.slice(1)}
+            </StatusBadge>
           </div>
-          <span className="text-xs truncate max-w-[150px]">{project.designer.name}</span>
-        </div>
-      ) : (
-        <div className="flex items-center text-xs text-muted-foreground mt-2">
-          <User className="h-3.5 w-3.5 mr-1" />
-          No designer assigned
-        </div>
-      )}
-      
-      <div>
-        <div className="w-full bg-muted h-1.5 rounded-full mt-2">
-          <div 
-            className="bg-wemakit-purple h-1.5 rounded-full"
-            style={{ width: `${project.completionPercentage}%` }}
-          ></div>
-        </div>
-        <div className="flex justify-end mt-1">
-          <span className="text-xs text-muted-foreground">{project.completionPercentage}%</span>
-        </div>
-      </div>
-    </div>
-  </div>
-);
+
+          {project.designer ? (
+            <div className="flex items-center text-xs text-muted-foreground gap-2">
+              {project.designer.avatar ? (
+                <img src={project.designer.avatar} alt={project.designer.name} className="w-5 h-5 rounded-full object-cover" />
+              ) : (
+                <User className="h-4 w-4" />
+              )}
+              <span className="truncate">{project.designer.name}</span>
+            </div>
+          ) : (
+            <div className="flex items-center text-xs text-muted-foreground gap-2">
+              <User className="h-4 w-4" />
+              <span>Unassigned</span>
+            </div>
+          )}
+
+          <div className="flex items-center text-xs text-muted-foreground gap-2">
+            <Calendar className="h-4 w-4" />
+            <span>{project.deadline ? new Date(project.deadline).toLocaleDateString() : 'No Deadline'}</span>
+          </div>
+
+          <div>
+            <Progress value={project.completionPercentage} className="h-2" />
+            <p className="text-xs text-muted-foreground text-right mt-1">
+              {project.completionPercentage}% Complete
+            </p>
+          </div>
+        </CardContent>
+      </Link>
+    </Card>
+  );
+};
 
 export default ProjectCard;
