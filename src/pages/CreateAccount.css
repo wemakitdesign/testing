@@ -1,0 +1,127 @@
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    padding: '40px 80px',
+    fontFamily: '"San Francisco Display", sans-serif',
+    background: '#fff',
+    minHeight: '100vh',
+  },
+  logo: {
+    height: '32px',
+    marginBottom: '30px',
+  },
+  flowBar: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    fontSize: '16px',
+    fontWeight: 500,
+    marginBottom: '20px',
+    paddingBottom: '20px',
+    borderBottom: '1px solid #e0e0e0', // ✅ garis abu di bawah flow bar
+  },
+  flowStep: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  separator: {
+    margin: '0 10px',
+    color: '#ccc',
+  },
+  contentWrapper: {
+    display: 'flex',
+    gap: '40px',
+    alignItems: 'flex-start',
+    justifyContent: 'center', // ✅ pastikan konten di tengah
+    maxWidth: '1100px',
+    margin: '0 auto', // ✅ center secara horizontal
+    paddingTop: '40px',
+  },
+  form: {
+    flex: 3,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  inputGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  label: {
+    fontWeight: 500,
+    fontSize: '15px',
+    marginBottom: '6px',
+  },
+  input: {
+    padding: '12px 16px',
+    fontSize: '16px',
+    border: '1px solid #ccc',
+    borderRadius: '6px',
+    width: '60%',
+    minWidth: '250px',
+  },
+  submitBtn: {
+    marginTop: '20px',
+    padding: '14px 20px',
+    fontSize: '16px',
+    backgroundColor: '#FB810A',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: 600,
+    width: '50%',
+    minWidth: '220px',
+  },
+  divider: {
+    width: '1px',
+    height: '100%',
+    backgroundColor: '#e0e0e0', // ✅ perjelas garis vertikal
+    minHeight: '500px',
+  },
+  planInfo: {
+    flex: 2,
+    paddingLeft: '40px',
+    borderLeft: '1px solid #e0e0e0', // ✅ alternatif jika divider masih tidak terlihat
+  },
+  planTitle: {
+    fontSize: '22px',
+    fontWeight: 700,
+    marginBottom: '16px',
+  },
+  featureList: {
+    padding: 0,
+    listStyle: 'none',
+    marginBottom: '16px',
+  },
+  featureItem: {
+    fontSize: '15px',
+    marginBottom: '10px',
+    color: '#444',
+  },
+  planPrice: {
+    fontSize: '16px',
+    fontWeight: 600,
+    marginBottom: '12px',
+  },
+  changePlan: {
+    color: '#007bff',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    fontSize: '14px',
+  },
+};
+contentRow: {
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'flex-start',
+  gap: '60px',
+  maxWidth: '1200px',
+  margin: '0 auto',
+  paddingTop: '40px',
+},
+verticalLine: {
+  width: '1px',
+  backgroundColor: '#e0e0e0',
+  height: '100%',
+  minHeight: '500px',
+},
