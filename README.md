@@ -2,8 +2,6 @@
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5
-
 ---
 
 ## What's New (Changelog)
