@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Search, MoveHorizontal, ArrowUpDown, ClipboardList, Clock as ClockIcon, Users, AlertTriangle, CheckCircle2, Calendar, User, Plus } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -9,16 +9,20 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ProjectCard from '@/components/projects/ProjectCard';
 import { useAdminTasks } from '@/hooks/tasks/use-admin-tasks'; // 🚀 Pake hook
+import { supabase } from '../../../lib/supabaseClient';
 
 const ProjectManagement: React.FC = () => {
   const { user } = useAuth();
-  const { tasks, isLoading } = useAdminTasks();
+  const { tasks: adminTasks, isLoading } = useAdminTasks();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [view, setView] = useState<'board' | 'list'>('board');
+  const [projects, setProjects] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredProjects = tasks.filter((task) => {
+  const filteredProjects = adminTasks.filter((task) => {
     const searchMatch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
     const statusMatch = statusFilter === 'all' || task.status === statusFilter;
     return searchMatch && statusMatch;
@@ -43,6 +47,18 @@ const ProjectManagement: React.FC = () => {
     { id: 'completed', name: 'Completed', icon: <CheckCircle2 className="h-4 w-4" /> },
     { id: 'onHold', name: 'On Hold', icon: <ClockIcon className="h-4 w-4" /> },
   ];
+
+  useEffect(() => {
+    const fetchProjectsAndTasks = async () => {
+      setLoading(true);
+      const { data: projs } = await supabase.from('projects').select('*');
+      setProjects(projs || []);
+      const { data: tks } = await supabase.from('tasks').select('*');
+      setTasks(tks || []);
+      setLoading(false);
+    };
+    fetchProjectsAndTasks();
+  }, []);
 
   if (isLoading) {
     return (

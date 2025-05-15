@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { StatusBadge } from '../../../components/ui/status-badge';
@@ -19,6 +19,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface RequestItem {
   id: string;
@@ -35,72 +36,52 @@ const RequestHistory = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for request history
-  const mockRequests: RequestItem[] = [
-    { 
-      id: '1', 
-      title: 'Website Redesign', 
-      type: 'website',
-      status: 'completed', 
-      createdAt: '2023-03-10T09:00:00Z',
-      updatedAt: '2023-03-15T14:30:00Z',
-      completedAt: '2023-03-15T14:30:00Z'
-    },
-    { 
-      id: '2', 
-      title: 'Logo Design for Startup', 
-      type: 'logo',
-      status: 'inProgress', 
-      createdAt: '2023-04-05T11:20:00Z',
-      updatedAt: '2023-04-07T16:45:00Z'
-    },
-    { 
-      id: '3', 
-      title: 'Marketing Brochure', 
-      type: 'print',
-      status: 'pending', 
-      createdAt: '2023-04-12T08:15:00Z',
-      updatedAt: '2023-04-12T08:15:00Z'
-    },
-    { 
-      id: '4', 
-      title: 'Social Media Template Pack', 
-      type: 'social',
-      status: 'revisions', 
-      createdAt: '2023-03-25T10:30:00Z',
-      updatedAt: '2023-04-02T13:20:00Z'
-    },
-    { 
-      id: '5', 
-      title: 'Conference Booth Design', 
-      type: 'exhibition',
-      status: 'cancelled', 
-      createdAt: '2023-02-18T14:00:00Z',
-      updatedAt: '2023-02-20T09:10:00Z'
-    },
-    { 
-      id: '6', 
-      title: 'Annual Report Design', 
-      type: 'print',
-      status: 'completed', 
-      createdAt: '2023-01-05T16:45:00Z',
-      updatedAt: '2023-01-22T11:30:00Z',
-      completedAt: '2023-01-22T11:30:00Z'
-    },
-  ];
+  useEffect(() => {
+    const fetchRequests = async () => {
+      setLoading(true);
+      if (!user?.id && !user?.auth_uid) return;
+      let { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('client_id', user.id)
+        .order('created_at', { ascending: false });
+      if ((!data || data.length === 0) && user.auth_uid) {
+        const { data: clientData } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('auth_uid', user.auth_uid)
+          .maybeSingle();
+        if (clientData?.id) {
+          const { data: dataByClientId } = await supabase
+            .from('tasks')
+            .select('*')
+            .eq('client_id', clientData.id)
+            .order('created_at', { ascending: false });
+          data = dataByClientId;
+        }
+      }
+      console.log('Fetched tasks:', data);
+      setRequests(data || []);
+      setLoading(false);
+    };
+    fetchRequests();
+  }, [user?.id, user?.auth_uid]);
 
   // Filter and sort requests
-  const filteredRequests = mockRequests
+  const filteredRequests = requests
     .filter(request => 
       (statusFilter === 'all' || request.status === statusFilter) &&
-      request.title.toLowerCase().includes(searchQuery.toLowerCase())
+      request.title?.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .sort((a, b) => {
-      const dateA = new Date(a.updatedAt).getTime();
-      const dateB = new Date(b.updatedAt).getTime();
+      const dateA = new Date(a.updated_at || a.updatedAt).getTime();
+      const dateB = new Date(b.updated_at || b.updatedAt).getTime();
       return sortDirection === 'asc' ? dateA - dateB : dateB - dateA;
     });
+  console.log('Filtered requests:', filteredRequests);
 
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -125,8 +106,8 @@ const RequestHistory = () => {
   };
 
   const getStatusCount = (status: string) => {
-    if (status === 'all') return mockRequests.length;
-    return mockRequests.filter(req => req.status === status).length;
+    if (status === 'all') return requests.length;
+    return requests.filter(req => req.status === status).length;
   };
 
   const toggleSortDirection = () => {
@@ -204,7 +185,7 @@ const RequestHistory = () => {
         </div>
       </motion.div>
 
-      <Tabs defaultValue="all" onValueChange={setStatusFilter} className="w-full">
+      <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="all" className="flex items-center gap-2">
             All <span className="px-2 py-0.5 text-xs rounded-full bg-muted">({getStatusCount('all')})</span>
@@ -267,11 +248,11 @@ const RequestHistory = () => {
                           <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-3">
                             <div className="flex items-center">
                               <CalendarDays className="mr-1 h-3.5 w-3.5" />
-                              Created: {new Date(request.createdAt).toLocaleDateString()}
+                              Created: {new Date(request.created_at || request.createdAt).toLocaleDateString()}
                             </div>
                             <div className="flex items-center">
                               <Clock className="mr-1 h-3.5 w-3.5" />
-                              Updated: {new Date(request.updatedAt).toLocaleDateString()}
+                              Updated: {new Date(request.updated_at || request.updatedAt).toLocaleDateString()}
                             </div>
                             <div className="capitalize bg-muted/50 px-2 py-0.5 rounded text-xs">
                               {request.type}
@@ -359,8 +340,8 @@ const RequestHistory = () => {
                   }}
                 >
                   <Card className="overflow-hidden hover:shadow-lg transition-all duration-300">
+                    {/* Same content structure as in "all" tab */}
                     <CardContent className="p-4 md:p-6">
-                      {/* Same content structure as in "all" tab */}
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div className="space-y-2">
                           <div className="flex flex-col md:flex-row md:items-center gap-2">
@@ -382,11 +363,11 @@ const RequestHistory = () => {
                           <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-3">
                             <div className="flex items-center">
                               <CalendarDays className="mr-1 h-3.5 w-3.5" />
-                              Created: {new Date(request.createdAt).toLocaleDateString()}
+                              Created: {new Date(request.created_at || request.createdAt).toLocaleDateString()}
                             </div>
                             <div className="flex items-center">
                               <Clock className="mr-1 h-3.5 w-3.5" />
-                              Updated: {new Date(request.updatedAt).toLocaleDateString()}
+                              Updated: {new Date(request.updated_at || request.updatedAt).toLocaleDateString()}
                             </div>
                             <div className="capitalize bg-muted/50 px-2 py-0.5 rounded text-xs">
                               {request.type}
@@ -497,11 +478,11 @@ const RequestHistory = () => {
                           <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-3">
                             <div className="flex items-center">
                               <CalendarDays className="mr-1 h-3.5 w-3.5" />
-                              Created: {new Date(request.createdAt).toLocaleDateString()}
+                              Created: {new Date(request.created_at || request.createdAt).toLocaleDateString()}
                             </div>
                             <div className="flex items-center">
                               <Clock className="mr-1 h-3.5 w-3.5" />
-                              Updated: {new Date(request.updatedAt).toLocaleDateString()}
+                              Updated: {new Date(request.updated_at || request.updatedAt).toLocaleDateString()}
                             </div>
                             <div className="capitalize bg-muted/50 px-2 py-0.5 rounded text-xs">
                               {request.type}
@@ -604,7 +585,7 @@ const RequestHistory = () => {
                           <div className="flex flex-wrap items-center text-xs text-muted-foreground gap-3">
                             <div className="flex items-center">
                               <CalendarDays className="mr-1 h-3.5 w-3.5" />
-                              Created: {new Date(request.createdAt).toLocaleDateString()}
+                              Created: {new Date(request.created_at || request.createdAt).toLocaleDateString()}
                             </div>
                             {request.completedAt && (
                               <div className="flex items-center">

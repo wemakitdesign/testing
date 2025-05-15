@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
@@ -29,6 +28,7 @@ import {
   RefreshCcw, 
   Download
 } from 'lucide-react';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface Subscription {
   id: string;
@@ -83,268 +83,27 @@ const BillingAdmin = () => {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isEditingPlan, setIsEditingPlan] = useState(false);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  // Mock subscription data
-  const subscriptions: Subscription[] = [
-    {
-      id: 'sub_1',
-      planName: 'Professional',
-      clientName: 'John Client',
-      clientEmail: 'john@acmecorp.com',
-      status: 'active',
-      amount: 199,
-      interval: 'month',
-      startDate: '2023-01-15T00:00:00Z',
-      nextBillingDate: '2023-05-15T00:00:00Z',
-    },
-    {
-      id: 'sub_2',
-      planName: 'Basic',
-      clientName: 'Sarah Smith',
-      clientEmail: 'sarah@startupinc.com',
-      status: 'active',
-      amount: 99,
-      interval: 'month',
-      startDate: '2023-02-08T00:00:00Z',
-      nextBillingDate: '2023-05-08T00:00:00Z',
-    },
-    {
-      id: 'sub_3',
-      planName: 'Enterprise',
-      clientName: 'Robert Johnson',
-      clientEmail: 'robert@techsolutions.com',
-      status: 'past_due',
-      amount: 499,
-      interval: 'month',
-      startDate: '2023-01-20T00:00:00Z',
-      nextBillingDate: '2023-04-20T00:00:00Z',
-    },
-    {
-      id: 'sub_4',
-      planName: 'Professional',
-      clientName: 'Emily Davis',
-      clientEmail: 'emily@fashionbrand.com',
-      status: 'trialing',
-      amount: 0,
-      interval: 'month',
-      startDate: '2023-04-10T00:00:00Z',
-      nextBillingDate: '2023-05-10T00:00:00Z',
-    },
-    {
-      id: 'sub_5',
-      planName: 'Enterprise',
-      clientName: 'Michael Brown',
-      clientEmail: 'michael@enterprise.com',
-      status: 'active',
-      amount: 499,
-      interval: 'month',
-      startDate: '2023-03-05T00:00:00Z',
-      nextBillingDate: '2023-05-05T00:00:00Z',
-    },
-    {
-      id: 'sub_6',
-      planName: 'Professional',
-      clientName: 'Jessica Wilson',
-      clientEmail: 'jessica@agency.com',
-      status: 'cancelled',
-      amount: 199,
-      interval: 'month',
-      startDate: '2023-02-01T00:00:00Z',
-      nextBillingDate: '2023-04-01T00:00:00Z',
-      cancelAtPeriodEnd: true
-    },
-  ];
-  
-  // Mock payment methods
-  const paymentMethods: PaymentMethod[] = [
-    {
-      id: 'pm_1',
-      clientName: 'John Client',
-      clientEmail: 'john@acmecorp.com',
-      brand: 'visa',
-      last4: '4242',
-      expMonth: 12,
-      expYear: 2025,
-      isDefault: true
-    },
-    {
-      id: 'pm_2',
-      clientName: 'Sarah Smith',
-      clientEmail: 'sarah@startupinc.com',
-      brand: 'mastercard',
-      last4: '5555',
-      expMonth: 10,
-      expYear: 2024,
-      isDefault: true
-    },
-    {
-      id: 'pm_3',
-      clientName: 'Robert Johnson',
-      clientEmail: 'robert@techsolutions.com',
-      brand: 'amex',
-      last4: '6789',
-      expMonth: 8,
-      expYear: 2023,
-      isDefault: true
-    },
-    {
-      id: 'pm_4',
-      clientName: 'Emily Davis',
-      clientEmail: 'emily@fashionbrand.com',
-      brand: 'discover',
-      last4: '1234',
-      expMonth: 6,
-      expYear: 2024,
-      isDefault: true
-    },
-  ];
-  
-  // Mock invoices
-  const invoices: Invoice[] = [
-    {
-      id: 'inv_1',
-      number: 'INV-001',
-      clientName: 'John Client',
-      clientEmail: 'john@acmecorp.com',
-      amount: 199,
-      status: 'paid',
-      date: '2023-04-15T00:00:00Z',
-      dueDate: '2023-04-15T00:00:00Z'
-    },
-    {
-      id: 'inv_2',
-      number: 'INV-002',
-      clientName: 'Sarah Smith',
-      clientEmail: 'sarah@startupinc.com',
-      amount: 99,
-      status: 'paid',
-      date: '2023-04-08T00:00:00Z',
-      dueDate: '2023-04-08T00:00:00Z'
-    },
-    {
-      id: 'inv_3',
-      number: 'INV-003',
-      clientName: 'Robert Johnson',
-      clientEmail: 'robert@techsolutions.com',
-      amount: 499,
-      status: 'open',
-      date: '2023-04-20T00:00:00Z',
-      dueDate: '2023-05-04T00:00:00Z'
-    },
-    {
-      id: 'inv_4',
-      number: 'INV-004',
-      clientName: 'Michael Brown',
-      clientEmail: 'michael@enterprise.com',
-      amount: 499,
-      status: 'paid',
-      date: '2023-04-05T00:00:00Z',
-      dueDate: '2023-04-05T00:00:00Z'
-    },
-    {
-      id: 'inv_5',
-      number: 'INV-005',
-      clientName: 'Jessica Wilson',
-      clientEmail: 'jessica@agency.com',
-      amount: 199,
-      status: 'uncollectible',
-      date: '2023-04-01T00:00:00Z',
-      dueDate: '2023-04-15T00:00:00Z'
-    },
-    {
-      id: 'inv_6',
-      number: 'INV-006',
-      clientName: 'John Client',
-      clientEmail: 'john@acmecorp.com',
-      amount: 199,
-      status: 'paid',
-      date: '2023-03-15T00:00:00Z',
-      dueDate: '2023-03-15T00:00:00Z'
-    },
-    {
-      id: 'inv_7',
-      number: 'INV-007',
-      clientName: 'Sarah Smith',
-      clientEmail: 'sarah@startupinc.com',
-      amount: 99,
-      status: 'paid',
-      date: '2023-03-08T00:00:00Z',
-      dueDate: '2023-03-08T00:00:00Z'
-    },
-    {
-      id: 'inv_8',
-      number: 'INV-008',
-      clientName: 'Robert Johnson',
-      clientEmail: 'robert@techsolutions.com',
-      amount: 499,
-      status: 'void',
-      date: '2023-03-20T00:00:00Z',
-      dueDate: '2023-04-03T00:00:00Z'
-    },
-  ];
-  
-  // Mock plans
-  const plans: Plan[] = [
-    {
-      id: 'plan_basic',
-      name: 'Basic',
-      description: 'Essential design services for small businesses',
-      price: 99,
-      interval: 'month',
-      features: [
-        '3 Design Requests',
-        'Logo Design',
-        'Social Media Design',
-        'Business Card Design',
-      ],
-    },
-    {
-      id: 'plan_professional',
-      name: 'Professional',
-      description: 'Comprehensive design services for growing businesses',
-      price: 199,
-      interval: 'month',
-      features: [
-        '10 Design Requests',
-        'Logo Design',
-        'Social Media Design',
-        'Business Card Design',
-        'Priority Support',
-        'Website Design',
-      ],
-      isPopular: true,
-    },
-    {
-      id: 'plan_enterprise',
-      name: 'Enterprise',
-      description: 'Complete design solution for established businesses',
-      price: 499,
-      interval: 'month',
-      features: [
-        'Unlimited Design Requests',
-        'Logo Design',
-        'Social Media Design',
-        'Business Card Design',
-        'Priority Support',
-        'Website Design',
-        'Unlimited Revisions',
-        'Brand Guidelines',
-      ],
-    },
-    {
-      id: 'plan_starter',
-      name: 'Starter',
-      description: 'Introductory plan for minimal design needs',
-      price: 49,
-      interval: 'month',
-      features: [
-        '1 Design Request',
-        'Logo Design',
-        'Basic Support',
-      ],
-      isArchived: true,
-    },
-  ];
+  useEffect(() => {
+    const fetchBillingData = async () => {
+      setLoading(true);
+      const { data: subs } = await supabase.from('subscriptions').select('*');
+      setSubscriptions(subs || []);
+      const { data: pays } = await supabase.from('payment_methods').select('*');
+      setPaymentMethods(pays || []);
+      const { data: invs } = await supabase.from('invoices').select('*');
+      setInvoices(invs || []);
+      const { data: pls } = await supabase.from('plans').select('*');
+      setPlans(pls || []);
+      setLoading(false);
+    };
+    fetchBillingData();
+  }, []);
   
   // Filter subscriptions
   const filteredSubscriptions = subscriptions

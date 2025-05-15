@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Button } from '../../../components/ui/button';
@@ -24,6 +23,7 @@ import {
   Download,
   Clock
 } from 'lucide-react';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface UserData {
   id: string;
@@ -43,125 +43,21 @@ const UserManagement = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
-  // Mock user data
-  const users: UserData[] = [
-    // Clients
-    {
-      id: 'c1',
-      name: 'John Client',
-      email: 'john@acmecorp.com',
-      avatar: 'https://ui-avatars.com/api/?name=John+Client&background=0D8ABC&color=fff',
-      role: 'client',
-      status: 'active',
-      lastActive: '2023-04-17T14:30:00Z',
-      createdAt: '2023-01-15T09:00:00Z',
-      projectsCount: 3,
-      company: 'Acme Corporation'
-    },
-    {
-      id: 'c2',
-      name: 'Sarah Smith',
-      email: 'sarah@startupinc.com',
-      avatar: 'https://ui-avatars.com/api/?name=Sarah+Smith&background=F59E0B&color=fff',
-      role: 'client',
-      status: 'active',
-      lastActive: '2023-04-16T10:15:00Z',
-      createdAt: '2023-02-08T11:30:00Z',
-      projectsCount: 2,
-      company: 'Startup Inc'
-    },
-    {
-      id: 'c3',
-      name: 'Robert Johnson',
-      email: 'robert@techsolutions.com',
-      avatar: 'https://ui-avatars.com/api/?name=Robert+Johnson&background=10B981&color=fff',
-      role: 'client',
-      status: 'inactive',
-      lastActive: '2023-03-25T16:45:00Z',
-      createdAt: '2023-01-20T14:00:00Z',
-      projectsCount: 1,
-      company: 'Tech Solutions'
-    },
-    {
-      id: 'c4',
-      name: 'Emily Davis',
-      email: 'emily@fashionbrand.com',
-      avatar: 'https://ui-avatars.com/api/?name=Emily+Davis&background=EC4899&color=fff',
-      role: 'client',
-      status: 'pending',
-      createdAt: '2023-04-10T08:30:00Z',
-      company: 'Fashion Brand'
-    },
-    
-    // Designers
-    {
-      id: 'd1',
-      name: 'Jane Designer',
-      email: 'jane@wemakit.com',
-      avatar: 'https://ui-avatars.com/api/?name=Jane+Designer&background=8B56F6&color=fff',
-      role: 'designer',
-      status: 'active',
-      lastActive: '2023-04-17T16:20:00Z',
-      createdAt: '2022-11-05T10:00:00Z',
-      projectsCount: 4
-    },
-    {
-      id: 'd2',
-      name: 'Mark Visual',
-      email: 'mark@wemakit.com',
-      avatar: 'https://ui-avatars.com/api/?name=Mark+Visual&background=4299E1&color=fff',
-      role: 'designer',
-      status: 'active',
-      lastActive: '2023-04-17T15:10:00Z',
-      createdAt: '2022-12-10T09:15:00Z',
-      projectsCount: 3
-    },
-    {
-      id: 'd3',
-      name: 'Sarah Creative',
-      email: 'sarah.c@wemakit.com',
-      avatar: 'https://ui-avatars.com/api/?name=Sarah+Creative&background=ED8936&color=fff',
-      role: 'designer',
-      status: 'active',
-      lastActive: '2023-04-16T11:30:00Z',
-      createdAt: '2023-01-22T14:30:00Z',
-      projectsCount: 2
-    },
-    {
-      id: 'd4',
-      name: 'Tom Graphic',
-      email: 'tom@wemakit.com',
-      avatar: 'https://ui-avatars.com/api/?name=Tom+Graphic&background=38A169&color=fff',
-      role: 'designer',
-      status: 'inactive',
-      lastActive: '2023-04-01T09:45:00Z',
-      createdAt: '2022-10-15T08:00:00Z',
-      projectsCount: 0
-    },
-    
-    // Admins
-    {
-      id: 'a1',
-      name: 'Alex Admin',
-      email: 'alex@wemakit.com',
-      avatar: 'https://ui-avatars.com/api/?name=Alex+Admin&background=111111&color=fff',
-      role: 'admin',
-      status: 'active',
-      lastActive: '2023-04-17T17:00:00Z',
-      createdAt: '2022-08-01T09:00:00Z',
-    },
-    {
-      id: 'a2',
-      name: 'Jordan Manager',
-      email: 'jordan@wemakit.com',
-      avatar: 'https://ui-avatars.com/api/?name=Jordan+Manager&background=6366F1&color=fff',
-      role: 'admin',
-      status: 'active',
-      lastActive: '2023-04-17T16:30:00Z',
-      createdAt: '2022-09-15T10:30:00Z',
-    }
-  ];
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setLoading(true);
+      // Fetch all users from clients, designers, admins
+      const { data: clients } = await supabase.from('clients').select('*');
+      const { data: designers } = await supabase.from('designers').select('*');
+      const { data: admins } = await supabase.from('users').select('*').eq('role', 'admin');
+      setUsers([...(clients || []), ...(designers || []), ...(admins || [])]);
+      setLoading(false);
+    };
+    fetchUsers();
+  }, []);
   
   // Filter users
   const filteredUsers = users.filter(user => {

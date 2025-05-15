@@ -24,26 +24,39 @@ const ActiveRequests: React.FC = () => {
       try {
         const { data: userData, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
-        const userId = userData.user?.id;
   
-        if (!userId) return;
+        const authId = userData.user?.id;
+        if (!authId) return;
   
+        // Ambil client berdasarkan auth_uid
+        const { data: clientData, error: clientError } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('auth_uid', authId)
+          .single();
+  
+        if (clientError || !clientData) throw clientError;
+        const clientId = clientData.id;
+  
+        // Ambil tasks milik client ini
         const { data, error } = await supabase
           .from('tasks')
           .select('*')
-          .eq('client_id', userId)
+          .eq('client_id', clientId)
           .order('created_at', { ascending: false });
   
         if (error) throw error;
   
-        const active = (data || []).filter(task => task.status !== 'completed').map(task => ({
-          id: task.id,
-          title: task.title,
-          status: task.status,
-          createdAt: task.created_at,
-          eta: task.deadline || '',
-          progress: task.progress || 0,
-        }));
+        const active = (data || [])
+          .filter(task => task.status !== 'completed')
+          .map(task => ({
+            id: task.id,
+            title: task.title,
+            status: task.status,
+            createdAt: task.created_at,
+            eta: task.deadline || '',
+            progress: task.progress || 0,
+          }));
   
         setRequests(active);
       } catch (error) {
@@ -53,6 +66,7 @@ const ActiveRequests: React.FC = () => {
   
     fetchRequests();
   }, []);
+  
 
   const handleViewDetails = (id: string) => {
     window.location.href = `/dashboard/requests/${id}`;

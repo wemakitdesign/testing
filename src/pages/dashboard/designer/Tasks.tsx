@@ -88,8 +88,8 @@ const Tasks = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <h1 className="text-3xl font-bold tracking-tight">Tugas Saya</h1>
-        <p className="text-muted-foreground">Kelola dan pantau tugas desain Anda</p>
+        <h1 className="text-3xl font-bold tracking-tight">My Task</h1>
+        <p className="text-muted-foreground">Manage and monitor your tasks</p>
       </motion.div>
 
       <motion.div
@@ -132,7 +132,7 @@ const Tasks = () => {
                   </div>
                   <Button asChild className="w-full mt-4 group">
                     <Link to={`/dashboard/tasks/${task.id}`}>
-                      Lihat Detail
+                      Details
                       <FileText className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                     </Link>
                   </Button>

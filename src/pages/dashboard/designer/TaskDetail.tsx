@@ -45,16 +45,18 @@ interface DesignFile {
 
 interface Comment {
   id: string;
-  client: {
+  task_id: string;
+  user_id: string;
+  content: string;
+  is_internal: boolean;
+  attachments?: string[];
+  created_at: string;
+  user: {
     id: string;
     name: string;
     avatar?: string;
-    company: string;
+    role: string;
   };
-  content: string;
-  timestamp: string;
-  isInternal: boolean;
-  attachments?: { name: string; size: number; }[];
 }
 
 interface TimeLog {
@@ -80,86 +82,48 @@ const TaskDetail = () => {
   const [uploading, setUploading] = useState(false);
   
   useEffect(() => {
-    const fetchTask = async () => {
+    const fetchData = async () => {
       setLoading(true);
-      setError(null);
-      if (!taskId) {
-        setError('Task ID not found');
-        setLoading(false);
-        return;
-      }
-
       try {
-        // Fetch task details with relations
         const { data: taskData, error: taskError } = await supabase
           .from('tasks')
-          .select(`
-            *,
-            client:clients (
-              id,
-              name,
-              company,
-              avatar
-            ),
-            designer:designers (
-              id,
-              name,
-              avatar
-            ),
-            project:projects (
-              id,
-              name
-            )
-          `)
+          .select('*')
           .eq('id', taskId)
           .single();
-
-        if (taskError) {
-          if (taskError.code === 'PGRST116') {
-            setError('Task not found');
-          } else {
-            throw taskError;
-          }
-          setLoading(false);
-          return;
-        }
-
-        if (!taskData) {
-          setError('Task not found');
-          setLoading(false);
-          return;
-        }
-
+        if (taskError) throw taskError;
         setTask(taskData);
 
-        // Fetch comments
         const { data: commentsData, error: commentsError } = await supabase
           .from('comments')
-          .select(`
-            *,
-            client:client_id (
-              id,
-              name,
-              avatar,
-              company
-            )
-          `)
+          .select('*')
           .eq('task_id', taskId)
           .order('created_at', { ascending: false });
-
         if (commentsError) throw commentsError;
-        setComments(commentsData || []);
 
+        const { data: usersData, error: usersError } = await supabase
+          .from('comment_users_view')
+          .select('id, name, avatar, role');
+        if (usersError) throw usersError;
+
+        const enriched = commentsData.map((c) => {
+          const u = usersData.find((u) => u.id === c.user_id);
+          return {
+            ...c,
+            user: u || { id: 'unknown', name: 'Unknown', avatar: '', role: 'unknown' }
+          };
+        });
+
+        setComments(enriched);
       } catch (err: any) {
-        console.error('Error fetching task:', err);
-        setError(err.message || 'Failed to fetch tasks');
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchTask();
+    if (taskId) fetchData();
   }, [taskId]);
+  
   
   // Mock existing design files
   const existingDesignFiles: DesignFile[] = [
@@ -207,78 +171,50 @@ const TaskDetail = () => {
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const commentText = isInternalComment ? newInternalNote : newComment;
-    
     if (!commentText.trim()) return;
 
     setUploading(true);
     try {
-      let uploadedUrls: string[] = [];
+      const uploadedUrls: string[] = [];
 
-      // Upload attachments if any
-      if (commentAttachments.length > 0) {
-        for (const file of commentAttachments) {
-          const fileName = `${Date.now()}-${file.name}`;
-          const { data, error } = await supabase.storage
-            .from('task-files')
-            .upload(`comments/${taskId}/${fileName}`, file);
+      for (const file of commentAttachments) {
+        const fileName = `${Date.now()}-${file.name}`;
+        const { data, error } = await supabase.storage
+          .from('task-files')
+          .upload(`comments/${taskId}/${fileName}`, file);
 
-          if (error) throw error;
-
-          const publicUrl = supabase.storage
-            .from('task-files')
-            .getPublicUrl(data.path).data.publicUrl;
-
-          if (publicUrl) uploadedUrls.push(publicUrl);
-        }
+        if (error) throw error;
+        const { publicUrl } = supabase.storage.from('task-files').getPublicUrl(data.path).data;
+        uploadedUrls.push(publicUrl);
       }
 
-      // Insert comment
-      const { data: comment, error: commentError } = await supabase
+      const { data: inserted, error: insertError } = await supabase
         .from('comments')
-        .insert([
-          {
-            task_id: taskId,
-            user_id: user.id,
-            content: commentText,
-            is_internal: isInternalComment,
-            attachments: uploadedUrls
-          }
-        ])
-        .select(`
-          *,
-          client:clients (
-            id,
-            name,
-            avatar,
-            company
-          )
-        `)
+        .insert({
+          task_id: taskId,
+          user_id: user.id,
+          content: commentText,
+          is_internal: isInternalComment,
+          attachments: uploadedUrls
+        })
+        .select()
         .single();
 
-      if (commentError) throw commentError;
+      if (insertError) throw insertError;
 
-      // Update comments list
-      setComments(prev => [comment, ...prev]);
+      const { data: userData } = await supabase
+        .from('comment_users_view')
+        .select('id, name, avatar, role')
+        .eq('id', user.id)
+        .single();
 
-      // Clear form
-      if (isInternalComment) {
-        setNewInternalNote('');
-      } else {
-        setNewComment('');
-      }
+      setComments(prev => [{ ...inserted, user: userData }, ...prev]);
+      isInternalComment ? setNewInternalNote('') : setNewComment('');
       setCommentAttachments([]);
 
-      toast({
-        title: isInternalComment ? "Internal note added" : "Comment added",
-        description: "Your message has been added to the thread.",
-      });
-
+      toast({ title: 'Comment sent', description: 'Your comment was added successfully.' });
     } catch (err: any) {
-      toast({
-        title: "Error",
-        description: err.message,
-        variant: "destructive"
-      });
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
     } finally {
       setUploading(false);
     }
@@ -411,44 +347,39 @@ const TaskDetail = () => {
     }
   };
   
-  if (loading) {
-    return <div className="flex justify-center items-center min-h-[60vh] text-muted-foreground">Loading...</div>;
-  }
-  if (error || !task) {
-    return <div className="flex justify-center items-center min-h-[60vh] text-destructive">{error || 'Task not found'}</div>;
-  }
+  if (loading) return <div className="text-center text-muted-foreground">Loading task details...</div>;
+  if (error || !task) return <div className="text-center text-red-500">{error || 'Task not found'}</div>;
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Link 
-              to="/dashboard/designer"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-            <h1 className="text-2xl font-bold tracking-tight">{task.title}</h1>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Task #{task.id}</span>
-            <span className="px-2">•</span>
-            <span>For {(task.client?.company || '-')}</span>
-          </div>
-        </div>
-        
+    <div className="flex items-center justify-between">
+      <div className="space-y-1">
         <div className="flex items-center gap-2">
-          {getPriorityBadge(task.priority)}
-          <StatusBadge 
-            variant={getStatusVariant(task.status)}
-            pulse={task.status === 'inProgress'}
-            className="px-3 py-1"
+          <Link 
+            to="/dashboard/designer"
+            className="text-muted-foreground hover:text-foreground transition-colors"
           >
-            {getStatusLabel(task.status)}
-          </StatusBadge>
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <h1 className="text-2xl font-bold tracking-tight">{task.title}</h1>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Task #{task.id}</span>
+          <span className="px-2">•</span>
+          <span>For {(task.client?.company || '-')}</span>
         </div>
       </div>
+      <div className="flex items-center gap-2">
+        {getPriorityBadge(task.priority)}
+        <StatusBadge 
+          variant={getStatusVariant(task.status)}
+          pulse={task.status === 'inProgress'}
+          className="px-3 py-1"
+        >
+          {getStatusLabel(task.status)}
+        </StatusBadge>
+      </div>
+    </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Left column - Task details */}
@@ -615,316 +546,159 @@ const TaskDetail = () => {
           </Card>
           
           <Card>
-            <CardHeader>
-              <CardTitle>Komunikasi</CardTitle>
-              <CardDescription>Thread diskusi proyek</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Tabs defaultValue="all" className="mb-6">
-                <TabsList>
-                  <TabsTrigger value="all">Semua Pesan</TabsTrigger>
-                  <TabsTrigger value="client">Pesan Klien</TabsTrigger>
-                  <TabsTrigger value="internal">
-                    <Lock className="h-3.5 w-3.5 mr-1.5" />
-                    Internal Note (visible to team members only)
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="all" className="mt-4 space-y-6">
-                  {comments.map(comment => (
-                    <div key={comment.id} className="flex gap-4">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
-                        <AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium flex items-center">
-                              {comment.user.name}
-                              <Badge 
-                                variant="outline" 
-                                className="ml-2 text-[10px] capitalize h-5"
-                              >
-                                {comment.user.role}
-                              </Badge>
-                              {comment.is_internal && (
-                                <Badge 
-                                  variant="secondary" 
-                                  className="ml-2 text-[10px] h-5 bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-                                >
-                                  <Lock className="h-3 w-3 mr-1" />
-                                  Internal Only
-                                </Badge>
-                              )}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(comment.created_at).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="text-sm">
-                          {comment.content}
-                        </p>
-                        {comment.attachments && comment.attachments.length > 0 && (
-                          <div className="mt-2 pt-2 border-t">
-                            <p className="text-xs text-muted-foreground mb-2 flex items-center">
-                              <Paperclip className="h-3 w-3 mr-1" /> 
-                              Lampiran
-                            </p>
-                            <div className="space-y-1">
-                              {comment.attachments.map((attachment, index) => (
-                                <div 
-                                  key={index}
-                                  className="flex items-center justify-between border rounded-md p-2 bg-muted/20"
-                                >
-                                  <div className="flex items-center">
-                                    <FileType className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                                    <span className="text-xs">{attachment}</span>
-                                  </div>
-                                  <Button variant="ghost" size="sm" className="h-6 px-2">
-                                    <DownloadCloud className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </TabsContent>
-                
-                <TabsContent value="client" className="mt-4 space-y-6">
-                  {comments.filter(c => !c.is_internal).map(comment => (
-                    <div key={comment.id} className="flex gap-4">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
-                        <AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium flex items-center">
-                              {comment.user.name}
-                              <Badge 
-                                variant="outline" 
-                                className="ml-2 text-[10px] capitalize h-5"
-                              >
-                                {comment.user.role}
-                              </Badge>
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(comment.created_at).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="text-sm">
-                          {comment.content}
-                        </p>
-                        {comment.attachments && comment.attachments.length > 0 && (
-                          <div className="mt-2 pt-2 border-t">
-                            <p className="text-xs text-muted-foreground mb-2 flex items-center">
-                              <Paperclip className="h-3 w-3 mr-1" /> 
-                              Lampiran
-                            </p>
-                            <div className="space-y-1">
-                              {comment.attachments.map((attachment, index) => (
-                                <div 
-                                  key={index}
-                                  className="flex items-center justify-between border rounded-md p-2 bg-muted/20"
-                                >
-                                  <div className="flex items-center">
-                                    <FileType className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                                    <span className="text-xs">{attachment}</span>
-                                  </div>
-                                  <Button variant="ghost" size="sm" className="h-6 px-2">
-                                    <DownloadCloud className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </TabsContent>
-                
-                <TabsContent value="internal" className="mt-4 space-y-6">
-                  {comments.filter(c => c.is_internal).map(comment => (
-                    <div key={comment.id} className="flex gap-4">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={comment.user.avatar} alt={comment.user.name} />
-                        <AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 space-y-2">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-medium flex items-center">
-                              {comment.user.name}
-                              <Badge 
-                                variant="outline" 
-                                className="ml-2 text-[10px] capitalize h-5"
-                              >
-                                {comment.user.role}
-                              </Badge>
-                              <Badge 
-                                variant="secondary" 
-                                className="ml-2 text-[10px] h-5 bg-yellow-100 text-yellow-800 hover:bg-yellow-100"
-                              >
-                                <Lock className="h-3 w-3 mr-1" />
-                                Internal Only
-                              </Badge>
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(comment.created_at).toLocaleString()}
-                            </p>
-                          </div>
-                        </div>
-                        <p className="text-sm">
-                          {comment.content}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+        <CardHeader>
+          <CardTitle>Comments</CardTitle>
+          <CardDescription>Discussion thread for this task</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="all">
+            <TabsList>
+              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="client">Client</TabsTrigger>
+              <TabsTrigger value="internal">Internal</TabsTrigger>
+            </TabsList>
+            <TabsContent value="all">
+  {/* Render existing comments */}
+  {comments.map((comment, index) => (
+  <div key={comment.id} className="flex gap-3 py-4 border-b">
+    <Avatar>
+      <AvatarImage src={comment.user.avatar} />
+      <AvatarFallback>{comment.user.name?.[0]}</AvatarFallback>
+    </Avatar>
+    <div>
+      <div className="flex gap-2 items-center">
+        <span className="font-semibold">{comment.user.name}</span>
+        <Badge variant="outline" className="text-xs">{comment.user.role}</Badge>
+        {comment.is_internal && (
+          <Badge variant="secondary" className="text-xs flex items-center">
+            <Lock className="w-3 h-3 mr-1" /> Internal
+          </Badge>
+        )}
+      </div>
+      <p className="text-sm mt-1 whitespace-pre-line">{comment.content}</p>
+      {Array.isArray(comment.attachments) && comment.attachments.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {comment.attachments.map((attachment, i) => (
+            <div
+              key={i}
+              className="flex justify-between items-center bg-muted/20 rounded-md p-2"
+            >
+              <div className="text-xs flex gap-2 items-center">
+                <FileType className="w-4 h-4" />
+                {typeof attachment === 'string' ? (
+                  <a
+                    href={attachment}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline truncate max-w-[200px]"
+                  >
+                    {attachment.split('/').pop()}
+                  </a>
+                ) : (
+                  <span className="truncate max-w-[200px]">
+                    {attachment.name} ({(attachment.size / 1024).toFixed(1)} KB)
+                  </span>
+                )}
+              </div>
+              <div>
+              {typeof attachment === 'string' ? (
+  <a href={attachment} download>
+    <Button variant="ghost" size="sm">
+      <DownloadCloud className="w-4 h-4" />
+    </Button>
+  </a>
+) : (
+  <Button 
+    variant="ghost" 
+    size="sm"
+    onClick={() => {
+      const filePath = `comments/${taskId}/${attachment.name}`;
+      const { data } = supabase
+        .storage
+        .from('task-files')
+        .getPublicUrl(filePath);
 
-                  <Separator />
-                  
-                  <form onSubmit={handleCommentSubmit}>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2 bg-yellow-50 text-yellow-800 p-3 rounded-md">
-                        <Lock className="h-4 w-4" />
-                        <span className="text-sm font-medium">Add an internal note...</span>
-                      </div>
-                      
-                      <Textarea
-                        placeholder="Add an internal note..."
-                        className="min-h-[100px]"
-                        value={newInternalNote}
-                        onChange={(e) => setNewInternalNote(e.target.value)}
-                        disabled={uploading}
-                      />
-                      
-                      <div className="flex justify-end">
-                        <Button 
-                          type="submit" 
-                          disabled={!newInternalNote.trim() || uploading}
-                          onClick={() => setIsInternalComment(true)}
-                        >
-                          {uploading ? (
-                            <>
-                              <Clock className="h-4 w-4 mr-2 animate-spin" />
-                              Sending...
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="h-4 w-4 mr-2" /> Add Internal Note
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </form>
-                </TabsContent>
-              </Tabs>
-              
-              <Separator className="mb-6" />
-              
-              <form onSubmit={handleCommentSubmit}>
-                <div className="space-y-4">
-                  <Textarea
-                    placeholder="Tulis pesan untuk klien..."
-                    className="min-h-[100px]"
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    disabled={uploading}
-                  />
-                  
-                  {commentAttachments.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground flex items-center">
-                        <Paperclip className="h-3 w-3 mr-1" /> 
-                        Lampiran ({commentAttachments.length})
-                      </p>
-                      <div className="space-y-1">
-                        {commentAttachments.map((file, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between border rounded-md p-2 bg-muted/20"
-                          >
-                            <div className="flex items-center">
-                              <FileType className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                              <span className="text-xs">
-                                {file.name}
-                                <span className="text-muted-foreground ml-1">
-                                  ({(file.size / 1024).toFixed(1)} KB)
-                                </span>
-                              </span>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2"
-                              onClick={() => removeCommentAttachment(index)}
-                              disabled={uploading}
-                            >
-                              Remove
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-between items-center">
-                    <div className="flex">
-                      <Button 
-                        variant="outline" 
-                        type="button" 
-                        onClick={() => document.getElementById('fileInput')?.click()}
-                        disabled={uploading}
-                      >
-                        <Paperclip className="h-4 w-4 mr-2" /> Attach File
-                      </Button>
-                      <input
-                        id="fileInput"
-                        type="file"
-                        className="sr-only"
-                        accept="image/*,.jpg,.jpeg,.png,.gif,.pdf,.zip"
-                        multiple
-                        onChange={(e) => {
-                          if (e.target.files?.length) {
-                            handleCommentAttachments(Array.from(e.target.files));
-                          }
-                        }}
-                        disabled={uploading}
-                      />
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      disabled={!newComment.trim() || uploading}
-                      onClick={() => setIsInternalComment(false)}
-                    >
-                      {uploading ? (
-                        <>
-                          <Clock className="h-4 w-4 mr-2 animate-spin" />
-                          Sending...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="h-4 w-4 mr-2" /> Send Message
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+      if (data?.publicUrl) {
+        window.open(data.publicUrl, '_blank');
+      }
+    }}
+  >
+    <DownloadCloud className="w-4 h-4" />
+  </Button>
+)}
+
+              </div>
+            </div>
+          ))}
         </div>
+      )}
+    </div>
+  </div>
+))}
+
+<form onSubmit={handleCommentSubmit} className="space-y-4">
+  <Textarea
+    placeholder={isInternalComment ? 'Add internal note...' : 'Write your message...'}
+    value={isInternalComment ? newInternalNote : newComment}
+    onChange={e => isInternalComment ? setNewInternalNote(e.target.value) : setNewComment(e.target.value)}
+    disabled={uploading}
+  />
+  {commentAttachments.length > 0 && (
+    <div className="mt-2 space-y-1">
+      {commentAttachments.map((file, i) => (
+        <div key={i} className="flex justify-between items-center bg-muted/20 rounded-md p-2">
+          <div className="text-xs flex gap-2 items-center">
+            <FileType className="w-4 h-4" />
+            <span className="truncate max-w-[200px]">
+              {file.name} ({(file.size / 1024).toFixed(1)} KB)
+            </span>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => removeCommentAttachment(i)}>
+            Remove
+          </Button>
+        </div>
+      ))}
+    </div>
+  )}
+  <div className="flex items-center gap-4">
+    <Button type="button" variant="outline" onClick={() => document.getElementById('commentFile')?.click()} disabled={uploading}>
+      <Paperclip className="w-4 h-4 mr-2" /> Attach File
+    </Button>
+    <input
+      id="commentFile"
+      type="file"
+      className="hidden"
+      multiple
+      onChange={e => handleCommentAttachments(Array.from(e.target.files || []))}
+      disabled={uploading}
+    />
+    <Button type="submit" disabled={uploading || (!newComment.trim() && !newInternalNote.trim())}>
+      {uploading ? 'Sending...' : 'Send'}
+    </Button>
+    <Button type="button" variant="ghost" onClick={() => setIsInternalComment(prev => !prev)}>
+      {isInternalComment ? 'Switch to Public' : 'Switch to Internal'}
+    </Button>
+  </div>
+</form>
+</TabsContent>
+            <TabsContent value="client">
+              {comments.filter(c => !c.is_internal).map(comment => (
+                <div key={comment.id}>{comment.content}</div>
+              ))}
+            </TabsContent>
+            <TabsContent value="internal">
+              {comments.filter(c => c.is_internal).map(comment => (
+                <div key={comment.id}>{comment.content}</div>
+              ))}
+            </TabsContent>
+          </Tabs>
+
+          <Separator className="my-6" />
+
+          
+        </CardContent>
+      </Card>
+    </div>
         
         {/* Right column - Status and time tracking */}
         <div className="space-y-6">
@@ -1004,118 +778,120 @@ const TaskDetail = () => {
             </CardContent>
           </Card>
           
-          <Card>
-            <CardHeader>
-              <CardTitle>Time Tracking</CardTitle>
-              <CardDescription>Log time spent on this task</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <form onSubmit={handleAddTimeLog} className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="space-y-2 col-span-1">
-                    <label htmlFor="hours" className="text-sm font-medium">Hours</label>
-                    <input
-                      id="hours"
-                      type="number"
-                      min="0.25"
-                      step="0.25"
-                      placeholder="0.00"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={logTime.hours}
-                      onChange={(e) => setLogTime({ ...logTime, hours: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2 col-span-2">
-                    <label htmlFor="description" className="text-sm font-medium">Description</label>
-                    <input
-                      id="description"
-                      type="text"
-                      placeholder="What did you work on?"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={logTime.description}
-                      onChange={(e) => setLogTime({ ...logTime, description: e.target.value })}
-                      required
-                    />
-                  </div>
+          {/* Designer Time Tracking Card Temporarily Disabled */}
+{/*
+<Card>
+  <CardHeader>
+    <CardTitle>Time Tracking</CardTitle>
+    <CardDescription>Log time spent on this task</CardDescription>
+  </CardHeader>
+  <CardContent className="space-y-6">
+    <form onSubmit={handleAddTimeLog} className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2 col-span-1">
+          <label htmlFor="hours" className="text-sm font-medium">Hours</label>
+          <input
+            id="hours"
+            type="number"
+            min="0.25"
+            step="0.25"
+            placeholder="0.00"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={logTime.hours}
+            onChange={(e) => setLogTime({ ...logTime, hours: e.target.value })}
+            required
+          />
+        </div>
+        <div className="space-y-2 col-span-2">
+          <label htmlFor="description" className="text-sm font-medium">Description</label>
+          <input
+            id="description"
+            type="text"
+            placeholder="What did you work on?"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={logTime.description}
+            onChange={(e) => setLogTime({ ...logTime, description: e.target.value })}
+            required
+          />
+        </div>
+      </div>
+      <Button type="submit" className="w-full">
+        <Plus className="h-4 w-4 mr-2" /> Add Time Entry
+      </Button>
+    </form>
+    <Separator />
+    <div className="space-y-4">
+      <h3 className="text-sm font-medium">Recent Time Entries</h3>
+      {Array.isArray(task?.timeLogs) && task.timeLogs.length > 0 ? (
+        <div className="space-y-2">
+          {task.timeLogs.map((log: TimeLog) => (
+            <div key={log.id} className="flex justify-between p-3 bg-muted/20 rounded-md border">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Clock1 className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="text-sm font-medium">{log.hours} hours</span>
                 </div>
-                <Button type="submit" className="w-full">
-                  <Plus className="h-4 w-4 mr-2" /> Add Time Entry
-                </Button>
-              </form>
-              
-              <Separator />
-              
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium">Recent Time Entries</h3>
-                
-                {Array.isArray(task?.timeLogs) && task.timeLogs.length > 0 ? (
-                  <div className="space-y-2">
-                    {task.timeLogs.map((log: TimeLog) => (
-                      <div 
-                        key={log.id}
-                        className="flex justify-between p-3 bg-muted/20 rounded-md border"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <Clock1 className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span className="text-sm font-medium">{log.hours} hours</span>
-                          </div>
-                          <p className="text-xs text-muted-foreground ml-5 mt-1">
-                            {log.description}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(log.date).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground text-center">No time log yet</div>
-                )}
-                
-                <Button variant="outline" className="w-full text-sm" asChild>
-                  <Link to="/dashboard/time-tracking">
-                    View All Time Entries
-                  </Link>
-                </Button>
+                <p className="text-xs text-muted-foreground ml-5 mt-1">{log.description}</p>
               </div>
-            </CardContent>
-          </Card>
+              <div className="text-right">
+                <span className="text-xs text-muted-foreground">{new Date(log.date).toLocaleDateString()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-muted-foreground text-center">No time log yet</div>
+      )}
+      <Button variant="outline" className="w-full text-sm" asChild>
+        <Link to="/dashboard/time-tracking">View All Time Entries</Link>
+      </Button>
+    </div>
+  </CardContent>
+</Card>
+*/}
           
-          <Card>
-            <CardHeader>
-              <CardTitle>Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start font-normal"
-              >
-                <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
-                Mark as Complete
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                className="w-full justify-start font-normal"
-              >
-                <AlertTriangle className="mr-2 h-4 w-4 text-yellow-500" />
-                Request Client Feedback
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                className="w-full justify-start font-normal text-destructive hover:text-destructive"
-              >
-                <AlertTriangle className="mr-2 h-4 w-4" />
-                Request Help
-              </Button>
-            </CardContent>
-          </Card>
+          {/* Actions Card - Only for admin, disable some buttons */}
+{user?.role === 'admin' && (
+  <Card>
+    <CardHeader>
+      <CardTitle>Actions</CardTitle>
+    </CardHeader>
+    <CardContent className="space-y-2">
+      <Button 
+        variant="outline" 
+        className="w-full justify-start font-normal"
+      >
+        <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" />
+        Mark as Complete
+      </Button>
+    </CardContent>
+  </Card>
+)}
+
+<Card>
+  <CardHeader>
+    <CardTitle>Actions</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-2">
+    <Button 
+      variant="outline" 
+      className="w-full justify-start font-normal"
+      disabled
+    >
+      <AlertTriangle className="mr-2 h-4 w-4 text-yellow-500" />
+      Request Client Feedback
+    </Button>
+
+    <Button 
+      variant="outline" 
+      className="w-full justify-start font-normal text-destructive hover:text-destructive"
+      disabled
+    >
+      <AlertTriangle className="mr-2 h-4 w-4" />
+      Request Help
+    </Button>
+  </CardContent>
+</Card>
         </div>
       </div>
     </div>

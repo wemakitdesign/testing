@@ -1,8 +1,280 @@
+# Design Management System
+
+A comprehensive design project management system built with React, TypeScript, and Supabase.
+
+## 🚀 Features
+
+### Admin Dashboard
+- **User Management**
+  - Manage clients and designers
+  - View user profiles and activity
+  - Handle user permissions and roles
+
+- **Project Management**
+  - Track all design projects
+  - Assign designers to projects
+  - Monitor project progress
+  - View project analytics
+
+- **Billing Management**
+  - Manage subscriptions and plans
+  - Track payments and invoices
+  - Handle payment methods
+  - Generate financial reports
+
+- **Analytics Dashboard**
+  - View key performance metrics
+  - Track revenue and growth
+  - Monitor project completion rates
+  - Analyze designer performance
+
+### Designer Dashboard
+- **Task Management**
+  - View assigned tasks
+  - Update task status
+  - Track deadlines
+  - Manage task priorities
+
+- **Project Overview**
+  - View assigned projects
+  - Track project progress
+  - Manage project files
+  - Communicate with clients
+
+- **Time Tracking**
+  - Log working hours
+  - Track project time
+  - Generate time reports
+
+### Client Dashboard
+- **Request Management**
+  - Submit design requests
+  - Track request status
+  - View design history
+  - Manage project files
+
+- **Communication**
+  - Chat with designers
+  - Provide feedback
+  - Request revisions
+  - Share files
+
+## 💾 Database Structure
+
+### Tables
+
+#### users
+- id: uuid (PK)
+- email: string
+- role: enum ('admin', 'designer', 'client')
+- created_at: timestamp
+- updated_at: timestamp
+
+#### clients
+- id: uuid (PK)
+- user_id: uuid (FK -> users.id)
+- name: string
+- company: string
+- avatar: string
+- created_at: timestamp
+- updated_at: timestamp
+
+#### designers
+- id: uuid (PK)
+- user_id: uuid (FK -> users.id)
+- name: string
+- avatar: string
+- skills: string[]
+- created_at: timestamp
+- updated_at: timestamp
+
+#### projects
+- id: uuid (PK)
+- title: string
+- description: text
+- client_id: uuid (FK -> clients.id)
+- designer_id: uuid (FK -> designers.id)
+- status: enum ('pending', 'in_progress', 'review', 'completed')
+- deadline: timestamp
+- created_at: timestamp
+- updated_at: timestamp
+
+#### tasks
+- id: uuid (PK)
+- project_id: uuid (FK -> projects.id)
+- title: string
+- description: text
+- status: enum ('pending', 'in_progress', 'review', 'completed')
+- priority: enum ('low', 'medium', 'high')
+- deadline: timestamp
+- created_at: timestamp
+- updated_at: timestamp
+
+#### comments
+- id: uuid (PK)
+- task_id: uuid (FK -> tasks.id)
+- client_id: uuid (FK -> clients.id)
+- content: text
+- attachments: jsonb
+- created_at: timestamp
+- updated_at: timestamp
+
+#### subscriptions
+- id: uuid (PK)
+- client_id: uuid (FK -> clients.id)
+- plan_id: uuid (FK -> plans.id)
+- status: enum ('active', 'cancelled', 'past_due', 'trialing')
+- start_date: timestamp
+- next_billing_date: timestamp
+- created_at: timestamp
+- updated_at: timestamp
+
+#### plans
+- id: uuid (PK)
+- name: string
+- description: text
+- price: decimal
+- interval: enum ('month', 'year')
+- features: string[]
+- is_popular: boolean
+- is_archived: boolean
+- created_at: timestamp
+- updated_at: timestamp
+
+#### invoices
+- id: uuid (PK)
+- subscription_id: uuid (FK -> subscriptions.id)
+- number: string
+- amount: decimal
+- status: enum ('paid', 'open', 'uncollectible', 'void')
+- date: timestamp
+- due_date: timestamp
+- created_at: timestamp
+- updated_at: timestamp
+
+#### time_logs
+- id: uuid (PK)
+- task_id: uuid (FK -> tasks.id)
+- designer_id: uuid (FK -> designers.id)
+- hours: decimal
+- description: text
+- date: timestamp
+- created_at: timestamp
+- updated_at: timestamp
+
+## 🛠️ Setup & Installation
+
+1. Clone the repository
+```bash
+git clone [repository-url]
+cd [project-name]
+```
+
+2. Install dependencies
+```bash
+npm install
+```
+
+3. Set up environment variables
+Create a `.env` file in the root directory:
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+4. Start the development server
+```bash
+npm run dev
+```
+
+## 🔧 Development Guidelines
+
+### Code Structure
+```
+src/
+├── components/     # Reusable UI components
+├── contexts/       # React contexts
+├── hooks/         # Custom React hooks
+├── lib/           # Utility functions and configurations
+├── pages/         # Page components
+│   ├── dashboard/
+│   │   ├── admin/
+│   │   ├── designer/
+│   │   └── client/
+└── types/         # TypeScript type definitions
+```
+
+### Best Practices
+1. Use TypeScript for type safety
+2. Follow React best practices and hooks
+3. Implement proper error handling
+4. Use proper loading states
+5. Implement proper authentication checks
+6. Follow the established folder structure
+7. Use proper naming conventions
+
+### Database Guidelines
+1. Always use proper foreign key relationships
+2. Implement proper indexing
+3. Use appropriate data types
+4. Follow naming conventions
+5. Implement proper constraints
+
+## 🔐 Security Considerations
+
+1. Implement proper authentication
+2. Use proper authorization checks
+3. Sanitize user inputs
+4. Implement rate limiting
+5. Use secure file uploads
+6. Implement proper error handling
+7. Use environment variables for sensitive data
+
+## 📝 API Documentation
+
+### Authentication Endpoints
+- POST /auth/login
+- POST /auth/register
+- POST /auth/logout
+
+### Project Endpoints
+- GET /projects
+- POST /projects
+- GET /projects/:id
+- PUT /projects/:id
+- DELETE /projects/:id
+
+### Task Endpoints
+- GET /tasks
+- POST /tasks
+- GET /tasks/:id
+- PUT /tasks/:id
+- DELETE /tasks/:id
+
+### User Endpoints
+- GET /users
+- POST /users
+- GET /users/:id
+- PUT /users/:id
+- DELETE /users/:id
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
 # Welcome to your Lovable project
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5
+**URL**: https://wemakit.co/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5
 
 ---
 
@@ -217,17 +489,17 @@ npm run dev
 
 ## How can I edit this code?
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5) and start prompting.
+Simply visit the [Wemakit Project](https://wemakit.co/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5) and start prompting.
 
-**Use Lovable**
+**Use Wemakit**
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5) and start prompting.
+Simply visit the [Wemakit Project](https://wemakit.co/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5) and start prompting.
 
-Changes made via Lovable will be committed automatically to this repo.
+Changes made via Wemakit will be committed automatically to this repo.
 
 **Use your preferred IDE**
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Wemakit.
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
@@ -273,15 +545,15 @@ This project is built with:
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5) and click on Share -> Publish.
+Simply open [Wemakit](https://wemakit.co/projects/adb0dded-c2d9-4001-8098-fa7dad4dd3d5) and click on Share -> Publish.
 
-## Can I connect a custom domain to my Lovable project?
+## Can I connect a custom domain to my Wemakit project?
 
 Yes, you can!
 
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+Read more here: [Setting up a custom domain](https://docs.wemakit.co/tips-tricks/custom-domain#step-by-step-guide)
 
 ## Database Setup (with Supabase)
 
@@ -356,24 +628,24 @@ INSERT INTO clients (name, email) VALUES
 
 -- Insert demo designers
 INSERT INTO designers (name, email, capacity, active_projects) VALUES
-('Jane Designer', 'jane@wemakit.com', 80, 2),
-('John Creative', 'john@wemakit.com', 100, 1),
-('Sarah Artist', 'sarah@wemakit.com', 90, 3);
+('Jane Designer', 'jane@wemakit.co', 80, 2),
+('John Creative', 'john@wemakit.co', 100, 1),
+('Sarah Artist', 'sarah@wemakit.co', 90, 3);
 
 -- Insert demo projects
 INSERT INTO projects (name, client_id, designer_id, status, priority, deadline, completion_percentage) VALUES
 ('Website Redesign', (SELECT id FROM clients WHERE email='contact@acme.com'), 
-(SELECT id FROM designers WHERE email='jane@wemakit.com'),
+(SELECT id FROM designers WHERE email='jane@wemakit.co'),
 'inProgress', 'high', NOW() + INTERVAL '30 days', 35),
 ('Mobile App Design', (SELECT id FROM clients WHERE email='info@techstart.com'),
-(SELECT id FROM designers WHERE email='john@wemakit.com'),
+(SELECT id FROM designers WHERE email='john@wemakit.co'),
 'pending', 'medium', NOW() + INTERVAL '45 days', 0);
 
 -- Insert demo tasks
 INSERT INTO tasks (title, project_id, designer_id, status, priority, start_time, end_time, description) VALUES
 ('Homepage Wireframes', 
 (SELECT id FROM projects WHERE name='Website Redesign'),
-(SELECT id FROM designers WHERE email='jane@wemakit.com'),
+(SELECT id FROM designers WHERE email='jane@wemakit.co'),
 'inProgress', 'high', NOW(), NOW() + INTERVAL '3 days',
 'Create wireframes for the new homepage design');
 ```
@@ -625,9 +897,9 @@ Untuk memudahkan testing, berikut contoh akun login default yang bisa Anda tamba
 
 | Role     | Email                | Password   |
 |----------|----------------------|------------|
-| Admin    | admin@lovable.dev    | password   |
-| Client   | client@lovable.dev   | password   |
-| Designer | designer@lovable.dev | password   |
+| Admin    | admin@wemakit.co     | password   |
+| Client   | client@wemakit.co    | password   |
+| Designer | designer@wemakit.co  | password   |
 
 **Cara setup:**
 1. Daftarkan user baru di halaman signup aplikasi Anda dengan email dan password di atas.

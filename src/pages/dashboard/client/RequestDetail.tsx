@@ -76,10 +76,21 @@ const RequestDetail = () => {
       setLoading(true);
       // Fetch request details
       const { data: req, error: reqError } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('id', requestId)
-        .single();
+  .from('tasks')
+  .select(`
+    *,
+    client_id, -- ini yang penting
+    designer:designer_id (
+      id,
+      name,
+      avatar,
+      role
+    )
+  `)
+  .eq('id', requestId)
+  .single();
+
+
       setRequestDetails(req);
       // Fetch design files (if any)
       setDesignFiles(req?.design_files || []);
@@ -97,21 +108,81 @@ const RequestDetail = () => {
     if (requestId) fetchData();
   }, [requestId]);
   
-  const handleCommentSubmit = (e: React.FormEvent) => {
+  const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newComment.trim()) {
-      // In a real app, you would send this to your API
-      console.log('New comment:', newComment, 'with attachments:', commentAttachments);
-      
+    if (!newComment.trim()) return;
+  
+    const uploadedUrls = [];
+  
+    for (const file of commentAttachments) {
+      const filePath = `comments/${requestId}/${file.name}`;
+      const { data, error } = await supabase.storage
+        .from('task-files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+  
+      if (error) {
+        toast({
+          title: 'Upload failed',
+          description: error.message,
+          variant: 'destructive'
+        });
+        return;
+      }
+  
+      uploadedUrls.push({
+        name: file.name,
+        size: file.size,
+        path: filePath
+      });
+    }
+  
+    const commentPayload = {
+      task_id: requestId,
+      content: newComment,
+      attachments: uploadedUrls,
+      client_id: user?.role === 'client' ? user.id : null,
+      designer_id: user?.role === 'designer' ? user.id : null,
+      admin_id: user?.role === 'admin' ? user.id : null,
+      is_internal: false
+    };
+  
+    const { error } = await supabase.from('comments').insert(commentPayload);
+  
+    if (error) {
+      toast({
+        title: "Failed to comment",
+        description: error.message,
+        variant: "destructive"
+      });
+    } else {
       toast({
         title: "Comment added",
-        description: "Your comment has been added to the thread.",
+        description: "Your comment has been posted."
       });
-      
+  
       setNewComment('');
       setCommentAttachments([]);
+  
+      // Refresh comment list
+      const { data: comm, error: commError } = await supabase
+        .from('comments')
+        .select(`
+          *,
+          client:client_id (id, name, avatar, company),
+          designer:designer_id (id, name, avatar),
+          admin:admin_id (id, name)
+        `)
+        .eq('task_id', requestId)
+        .order('created_at', { ascending: false });
+  
+      if (!commError) setComments(comm || []);
     }
   };
+  
+  
   
   const handleCommentAttachments = (files: File[]) => {
     setCommentAttachments(prev => [...prev, ...files]);
@@ -164,7 +235,7 @@ const RequestDetail = () => {
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight">{requestDetails?.title}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{requestDetails?.title || '-'}</h1>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Request #{requestDetails?.id}</span>
@@ -214,7 +285,7 @@ const RequestDetail = () => {
               <div>
                 <h3 className="font-medium mb-2">Your Attachments</h3>
                 <div className="space-y-2">
-                  {requestDetails?.attachments.map((attachment: any) => (
+                  {Array.isArray(requestDetails?.attachments) ? requestDetails.attachments.map((attachment: any) => (
                     <div 
                       key={attachment.id}
                       className="flex items-center justify-between border rounded-md p-3 bg-muted/20"
@@ -232,7 +303,7 @@ const RequestDetail = () => {
                         <DownloadCloud className="h-4 w-4" />
                       </Button>
                     </div>
-                  ))}
+                  )) : null}
                 </div>
               </div>
             </CardContent>
@@ -245,7 +316,7 @@ const RequestDetail = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {designFiles.length > 0 ? (
+                {Array.isArray(designFiles) && designFiles.length > 0 ? (
                   designFiles.map((file: any) => (
                     <div 
                       key={file.id}
@@ -291,19 +362,19 @@ const RequestDetail = () => {
                 {comments.map((comment: any) => (
                   <div key={comment.id} className="flex gap-4">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={comment.client.avatar} alt={comment.client.name} />
-                      <AvatarFallback>{comment.client.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src={comment.client?.avatar || undefined} alt={comment.client?.name || '-'} />
+                      <AvatarFallback>{comment.client?.name?.charAt(0) || '-'}</AvatarFallback>
                     </Avatar>
                     <div className="flex-1 space-y-2">
                       <div className="flex justify-between items-start">
                         <div>
                           <p className="font-medium">
-                            {comment.client.name}
+                            {comment.client?.name || '-'}
                             <Badge 
                               variant="outline" 
                               className="ml-2 text-[10px] capitalize h-5"
                             >
-                              {comment.client.company}
+                              {comment.client?.company || '-'}
                             </Badge>
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -317,7 +388,7 @@ const RequestDetail = () => {
                       <p className="text-sm">
                         {comment.content}
                       </p>
-                      {comment.attachments && comment.attachments.length > 0 && (
+                      {Array.isArray(comment.attachments) && comment.attachments.length > 0 && (
                         <div className="mt-2 pt-2 border-t">
                           <p className="text-xs text-muted-foreground mb-2 flex items-center">
                             <Paperclip className="h-3 w-3 mr-1" /> 
@@ -445,7 +516,7 @@ const RequestDetail = () => {
               
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Request Type</span>
-                <span className="text-sm capitalize">{requestDetails?.type}</span>
+                <span className="text-sm capitalize">{requestDetails?.type || '-'}</span>
               </div>
               
               <div className="flex justify-between items-center">
@@ -466,18 +537,26 @@ const RequestDetail = () => {
               <Separator />
               
               <div>
-                <span className="text-sm text-muted-foreground">Assigned Designer</span>
-                <div className="flex items-center mt-2">
-                  <Avatar className="h-8 w-8 mr-2">
-                    <AvatarImage src={requestDetails?.assignedTo.avatar} alt={requestDetails?.assignedTo.name} />
-                    <AvatarFallback>{requestDetails?.assignedTo.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium">{requestDetails?.assignedTo.name}</p>
-                    <p className="text-xs text-muted-foreground capitalize">{requestDetails?.assignedTo.role}</p>
-                  </div>
-                </div>
-              </div>
+  <span className="text-sm text-muted-foreground">Assigned Designer</span>
+  <div className="flex items-center mt-2">
+    <Avatar className="h-8 w-8 mr-2">
+      <AvatarImage
+        src={requestDetails?.designer?.avatar || undefined}
+        alt={requestDetails?.designer?.name || '-'}
+      />
+      <AvatarFallback>
+        {requestDetails?.designer?.name?.charAt(0) || '-'}
+      </AvatarFallback>
+    </Avatar>
+    <div>
+      <p className="text-sm font-medium">{requestDetails?.designer?.name || '-'}</p>
+      <p className="text-xs text-muted-foreground capitalize">
+        {requestDetails?.designer?.role || '-'}
+      </p>
+    </div>
+  </div>
+</div>
+
               
               <Separator />
               
@@ -508,10 +587,10 @@ const RequestDetail = () => {
                         {activity.user && (
                           <div className="flex items-center">
                             <Avatar className="h-4 w-4 mr-1">
-                              <AvatarImage src={activity.user.avatar} alt={activity.user.name} />
-                              <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
+                              <AvatarImage src={activity.user.avatar || undefined} alt={activity.user.name || '-'} />
+                              <AvatarFallback>{activity.user.name?.charAt(0) || '-'}</AvatarFallback>
                             </Avatar>
-                            <span className="text-xs">{activity.user.name}</span>
+                            <span className="text-xs">{activity.user.name || '-'}</span>
                           </div>
                         )}
                         <span className="text-xs text-muted-foreground">
